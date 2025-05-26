@@ -1,0 +1,101 @@
+fllutter
+
+
+
+
+
+
+database of save or saved places(node js)POSTGIS
+schedule saved in the database and transportation type
+zones(make radius based on data from database)
+get location of another thing or person(Socket.IO with Node.js)
+path from point one to two(get places from db)
+notification
+
+
+
+
+
+	
+------------option to disable zone radial color in setting
+
+
+
+
+
+the search system for the app
+
+
+Scoring System (0-200+ points):
+Exact Match: 100 points (highest priority)
+Starts With Query: 80 points
+Contains Query: 60 points
+Address Contains Query: 30 points
+Word-by-Word Matching: Up to 40 bonus points
+Length Similarity: Up to 10 bonus points
+Edit Distance (Levenshtein): Up to 15 bonus points
+Source Preference: Small bonus (Google gets 2, Mapbox gets 1)
+Category Bonus: 3 points for POIs/businesses
+Proximity Bonus: Up to 20 points for nearby results (location-biased search only)
+
+
+
+
+
+
+
+
+
+for the image
+inside _onMapcreated function
+
+final pointAnnotationManager = await mapboxMapController?annotations.createPointAnnotationManager();
+final Uint8List imageData = await loadHQMarkerImage();
+mp.PointAnnotationOptions(pointAnnotationOptions = mp.PointAnnotationOptions(
+	image: imageData,
+	iconSize: 0.3,
+	geometry: mp.Point(
+		coordinates: mp.Position(the location of the current location pucker),),
+);
+
+
+pointAnnotationManager?.create(pointAnnotationOptions,);
+
+
+
+somewhere at the bottom
+
+Future<Uint8List> loadHQMarkerImage() async {
+	var byteData = await rootBundle.load("the image directory/andrii.jpg");
+	return bytedata.buffer.asUInt8List();
+}
+
+
+
+
+
+locationPuck: mp.LocationPuck(
+            // Use only 2D puck for better compatibility
+            locationPuck2D: mp.LocationPuck2D(
+              topImage: imageData, // Your circular image
+              bearingImage: null, // No bearing image
+              shadowImage: null, // No shadow
+              scaleExpression: '["interpolate", ["linear"], ["zoom"], 10, 0.4, 20, 1.0]', // Better scaling
+            ),
+          ),
+
+
+
+
+
+
+
+POSTGIS
+Imagine you’re developing a delivery route-planning app. Initially, you might only need to store the pickup and drop-off coordinates. Over time, as you implement features like “show me all possible routes” or “find the most efficient path,” you can migrate the data to PostGIS and start storing each route option as a LINESTRING. This allows you to perform advanced spatial queries, like comparing distances, checking for overlaps, or even visualizing your routes directly on a map.
+
+
+
+
+
+
+my phone uses its built-in GPS to obtain its own location and sends that directly to your server.
