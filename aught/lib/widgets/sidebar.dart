@@ -1,5 +1,9 @@
+import 'package:aught/screens/contactUs_screen.dart';
+import 'package:aught/screens/policyOfPrivacy_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aught/widgets/SideBarElements/SettingButton.dart';
+import 'package:aught/screens/notificationHistory_screen.dart';
+import 'package:aught/screens/setting_screen.dart';
 
 class Sidebar extends StatelessWidget {
   final VoidCallback onClose;
@@ -40,7 +44,17 @@ class Sidebar extends StatelessWidget {
                     icon: Icons.notifications,
                     label: 'Notification History',
                     onTap: () {
-                      Navigator.pushNamed(context, '/Notification History');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => Notificationhistorypage(
+                                onClose: () {
+                                  Navigator.pop(context);
+                                },
+                              ),
+                        ),
+                      );
                     },
                   ),
                   const Divider(
@@ -53,7 +67,17 @@ class Sidebar extends StatelessWidget {
                     icon: Icons.settings,
                     label: 'Settings',
                     onTap: () {
-                      Navigator.pushNamed(context, '/settings');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => Settingpage(
+                                onClose: () {
+                                  Navigator.pop(context);
+                                },
+                              ),
+                        ),
+                      );
                     },
                   ),
                   const Divider(
@@ -66,7 +90,17 @@ class Sidebar extends StatelessWidget {
                     icon: Icons.help_outline,
                     label: 'Contact Us',
                     onTap: () {
-                      Navigator.pushNamed(context, '/contactUs');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => Contactuspage(
+                                onClose: () {
+                                  Navigator.pop(context);
+                                },
+                              ),
+                        ),
+                      );
                     },
                   ),
                   const Divider(
@@ -78,8 +112,18 @@ class Sidebar extends StatelessWidget {
                   SidebarButton(
                     icon: Icons.privacy_tip,
                     label: 'Privacy Policy',
-                    onTap: () {
-                      Navigator.pushNamed(context, '/sprivacyPolicy');
+                     onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (context) => Policyofprivacy(
+                                onClose: () {
+                                  Navigator.pop(context);
+                                },
+                              ),
+                        ),
+                      );
                     },
                   ),
                 ],
