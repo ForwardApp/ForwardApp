@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:aught/widgets/SideBarElements/SettingButton.dart';
 
 class Sidebar extends StatelessWidget {
   final VoidCallback onClose;
@@ -25,32 +26,50 @@ class Sidebar extends StatelessWidget {
                     icon: const Icon(
                       Icons.close,
                       color: Colors.black54,
-                      size: 32, // Increased from 24 to 32
+                      size: 32,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Sidebar content
-            const Expanded(
-              child: Center(
-                child: Text(
-                  'SIDEBAR',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+            // Sidebar content in Expanded
+            Expanded(
+              child: ListView(
+                children: [
+                  SidebarButton(
+                    icon: Icons.notifications,
+                    label: 'Notification History',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/Notification History');
+                    },
                   ),
-                ),
+                  SidebarButton(
+                    icon: Icons.settings,
+                    label: 'Settings',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/settings');
+                    },
+                  ),
+                  SidebarButton(
+                    icon: Icons.help_outline,
+                    label: 'Contact Us',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/contactUs');
+                    },
+                  ),
+                  SidebarButton(
+                    icon: Icons.privacy_tip,
+                    label: 'Privacy Policy',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/sprivacyPolicy');
+                    },
+                  ),
+                ],
               ),
             ),
-
             // Company logo at the bottom
             Padding(
-              padding: const EdgeInsets.only(
-                bottom: 10.0,
-              ), // Add some bottom padding
+              padding: const EdgeInsets.only(bottom: 10.0),
               child: Center(
                 child: Image.asset(
                   'lib/assets/companylogo copy.webp',

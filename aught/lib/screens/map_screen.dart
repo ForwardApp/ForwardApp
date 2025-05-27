@@ -277,10 +277,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       );
 
       // Create point annotation manager only once
-      if (_pointAnnotationManager == null) {
-        _pointAnnotationManager = await mapboxMapController?.annotations
+      _pointAnnotationManager ??= await mapboxMapController?.annotations
             .createPointAnnotationManager();
-      }
 
       // Load the circular image using the service
       final Uint8List imageData = await ImageMarkerService.createCircularMarker(
