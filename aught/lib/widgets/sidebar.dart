@@ -43,6 +43,12 @@ class Sidebar extends StatelessWidget {
                       Navigator.pushNamed(context, '/Notification History');
                     },
                   ),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   SidebarButton(
                     icon: Icons.settings,
                     label: 'Settings',
@@ -50,12 +56,24 @@ class Sidebar extends StatelessWidget {
                       Navigator.pushNamed(context, '/settings');
                     },
                   ),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   SidebarButton(
                     icon: Icons.help_outline,
                     label: 'Contact Us',
                     onTap: () {
                       Navigator.pushNamed(context, '/contactUs');
                     },
+                  ),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
                   ),
                   SidebarButton(
                     icon: Icons.privacy_tip,
