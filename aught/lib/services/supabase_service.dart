@@ -105,4 +105,35 @@ class SupabaseService {
       rethrow;
     }
   }
+
+  static Future<void> saveSafeZone({
+    required String locationName,
+    String? locationAddress,
+    double? locationLat,
+    double? locationLng,
+  }) async {
+    try {
+      if (!_isInitialized) {
+        debugPrint('Auto-initializing Supabase before saving safe zone...');
+        await initialize();
+      }
+      
+      if (!_isInitialized) {
+        throw Exception('Could not initialize Supabase service');
+      }
+
+      await client.from('safe_zone').insert({
+        'location_name': locationName,
+        'location_address': locationAddress ?? '',
+        'location_lat': locationLat,
+        'location_lng': locationLng,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      
+      debugPrint('Safe zone saved successfully to safe_zone table');
+    } catch (e) {
+      debugPrint('Error saving safe zone: $e');
+      rethrow;
+    }
+  }
 }

@@ -28,12 +28,29 @@ async function createInitialTable() {
           second_location_lat DOUBLE PRECISION,
           second_location_lng DOUBLE PRECISION,
           transport_mode TEXT,
+          start_time TEXT,
+          end_time TEXT,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
         );
         
         ALTER TABLE location_list ENABLE ROW LEVEL SECURITY;
         
         CREATE POLICY "Enable all operations for users" ON location_list
+          FOR ALL USING (true);
+
+        -- Safe zone table for storing safe home locations
+        CREATE TABLE IF NOT EXISTS safe_zone (
+          id SERIAL PRIMARY KEY,
+          location_name TEXT NOT NULL,
+          location_address TEXT,
+          location_lat DOUBLE PRECISION,
+          location_lng DOUBLE PRECISION,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+        
+        ALTER TABLE safe_zone ENABLE ROW LEVEL SECURITY;
+        
+        CREATE POLICY "Enable all operations for safe zone" ON safe_zone
           FOR ALL USING (true);
       `
         });
@@ -45,7 +62,8 @@ async function createInitialTable() {
 
         console.log('Tables created successfully');
         console.log('- aught_table with columns: id, created_at');
-        console.log('- route_locations table for storing user routes');
+        console.log('- location_list table for storing user routes');
+        console.log('- safe_zone table for storing safe home locations');
 
     } catch (error) {
         console.error('Migration failed:', error.message);

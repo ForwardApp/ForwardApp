@@ -119,10 +119,10 @@ class _LocationListState extends State<LocationList> {
               // Read more button - right aligned
               IconButton(
                 onPressed: () {
-                  _showMoreInfoModal(context);
+                  _showMoreInfoModal(context, location);
                 },
                 icon: const Icon(
-                  Icons.menu_book, // Book icon to suggest more information
+                  Icons.menu_book,
                   color: Colors.black54,
                   size: 20,
                 ),
@@ -141,7 +141,7 @@ class _LocationListState extends State<LocationList> {
     );
   }
 
-  void _showMoreInfoModal(BuildContext context) {
+  void _showMoreInfoModal(BuildContext context, Map<String, dynamic> location) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -150,19 +150,123 @@ class _LocationListState extends State<LocationList> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Container(
-            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.all(24),
-            child: const Center(
-              // Add Center widget
-              child: Text(
-                'More Information',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            location['first_location_name'] ?? 'Unknown location',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                          if (location['first_location_address'] != null && 
+                              location['first_location_address'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              location['first_location_address'],
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                          
+                          const SizedBox(height: 16),
+                          
+                          Text(
+                            location['second_location_name'] ?? 'Unknown location',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black,
+                            ),
+                          ),
+                          if (location['second_location_address'] != null && 
+                              location['second_location_address'].toString().isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              location['second_location_address'],
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                          
+                          const SizedBox(height: 16),
+                          
+                          _getTransportIcon(location['transport_mode']),
+                        ],
+                      ),
+                    ),
+                    
+                    const SizedBox(width: 16),
+                    
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          location['start_time'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          location['end_time'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _getTransportIcon(String? transportMode) {
+    IconData iconData;
+    switch (transportMode?.toLowerCase()) {
+      case 'car':
+        iconData = Icons.directions_car;
+        break;
+      case 'bike':
+        iconData = Icons.directions_bike;
+        break;
+      case 'walk':
+      default:
+        iconData = Icons.directions_walk;
+        break;
+    }
+    
+    return Icon(
+      iconData,
+      size: 20,
+      color: Colors.black,
     );
   }
 }

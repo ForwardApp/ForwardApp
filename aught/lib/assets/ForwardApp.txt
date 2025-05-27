@@ -7,6 +7,9 @@ fllutter
 
 database of save or saved places(node js)POSTGIS
 schedule saved in the database and transportation type
+
+
+
 zones(make radius based on data from database)
 get location of another thing or person(Socket.IO with Node.js)
 path from point one to two(get places from db)

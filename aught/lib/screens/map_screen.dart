@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart' as gl;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mp;
 import '../widgets/location_button.dart';
 import '../widgets/directions_button.dart';
+import '../widgets/safehome_button.dart';
 import '../widgets/sidebar.dart';
 import '../services/image_marker_service.dart';
 
@@ -167,6 +168,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 // My Location Button
                 LocationButton(mapboxMapController: mapboxMapController),
 
+                const SizedBox(height: 8),
+                
+                // Safe Home Button
+                const SafeHomeButton(),
+                
                 const SizedBox(height: 8),
 
                 // Directions Button
