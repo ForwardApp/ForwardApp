@@ -76,41 +76,54 @@ class _SafeZoneListState extends State<SafeZoneList> {
   Widget _buildSafeZoneItem(BuildContext context, Map<String, dynamic> safeZone) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
-            children: [
-              const Icon(Icons.home, color: Colors.green, size: 24),
+        GestureDetector(
+          onTap: () {
+            debugPrint('Safe zone tapped: ${safeZone['location_name']}');
+            final lat = safeZone['location_lat'];
+            final lng = safeZone['location_lng'];
+            Navigator.pop(context, {
+              'location_name': safeZone['location_name'] ?? 'Unknown location',
+              'location_lat': lat,
+              'location_lng': lng,
+              'id': safeZone['id'], // Pass the ID back
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.home, color: Colors.green, size: 24),
 
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      safeZone['location_name'] ?? 'Unknown location',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black,
-                      ),
-                    ),
-                    if (safeZone['location_address'] != null && 
-                        safeZone['location_address'].toString().isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        safeZone['location_address'],
+                        safeZone['location_name'] ?? 'Unknown location',
                         style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
                         ),
                       ),
+                      if (safeZone['location_address'] != null && 
+                          safeZone['location_address'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          safeZone['location_address'],
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
 

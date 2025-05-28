@@ -203,10 +203,19 @@ class _LocationInputScreenState extends State<LocationInputScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           child: InkWell(
             onTap: () {
-              // Return both name and address as a map when location is selected
+
+              String fullAddress = result.address;
+              
+              // Only include place name in address if the address starts with a postal code
+              if (result.address.isNotEmpty && 
+                  result.address != result.placeName &&
+                  RegExp(r'^\d{5}').hasMatch(result.address.trim())) {
+                fullAddress = '${result.placeName}, ${result.address}';
+              }
+              
               Navigator.pop(context, {
                 'name': result.placeName,
-                'address': result.address,
+                'address': fullAddress,
                 'lat': result.latitude,
                 'lng': result.longitude,
               });

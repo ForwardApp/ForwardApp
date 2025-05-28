@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as gl;
@@ -11,9 +12,19 @@ import '../widgets/directions_button.dart';
 import '../widgets/safehome_button.dart';
 import '../widgets/sidebar.dart';
 import '../services/image_marker_service.dart';
+import '../widgets/bounding_box.dart';
+import '../widgets/safe_zone_toolbar.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
+
+  static _MapScreenState? _instance;
+  
+  static void flyToLocation(double latitude, double longitude, String locationName, {int? safeZoneId}) {
+    if (_instance != null && _instance!.mapboxMapController != null) {
+      _instance!.flyToSafeZone(latitude, longitude, locationName, safeZoneId: safeZoneId);
+    }
+  }
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -25,12 +36,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   bool _hasLocationPermission = false;
   bool _initialLocationRequested = false;
   bool _isSidebarOpen = false;
+  bool _isInSafeZoneMode = false;
+  bool _isPanDisabled = false; // Pan is enabled by default
+  
+  // Fields to store current safe zone data
+  int? _currentSafeZoneId;
+  String? _currentSafeZoneName;
+  
   late AnimationController _sidebarAnimationController;
   late Animation<Offset> _sidebarSlideAnimation;
 
-  // Add these variables to track the annotation manager and annotation
   mp.PointAnnotationManager? _pointAnnotationManager;
   mp.PointAnnotation? _userImageAnnotation;
+  mp.PointAnnotationManager? _greenDotManager;
   Timer? _positionUpdateTimer;
   Timer? _zoomCheckTimer; // Add this new timer for zoom checking
 
@@ -57,6 +75,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    MapScreen._instance = this;
     // Initialize sidebar animation controller
     _sidebarAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -112,80 +131,106 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Map as the base layer
           mp.MapWidget(
-            styleUri: _getCurrentStyleUri(), // Use time-based style
+            key: ValueKey(_getCurrentStyleUri()),
+            styleUri: _getCurrentStyleUri(),
+            cameraOptions: mp.CameraOptions(
+              center: mp.Point(coordinates: mp.Position(0, 0)),
+              zoom: 1.0,
+            ),
             onMapCreated: _onMapCreated,
           ),
 
-          // Sidebar button in top left
-          Positioned(
-            left: 16,
-            top: 50, // Adjusted for status bar
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 4.0,
-                    offset: const Offset(0, 2),
-                  ),
+          // Add BoundingBoxWidget first (lower z-index)
+          if (_isInSafeZoneMode && mapboxMapController != null)
+            BoundingBoxWidget(
+              mapController: mapboxMapController,
+              isPanEnabled: !_isPanDisabled, // Pass false when pan is disabled
+            ),
+            
+          // Then add UI elements that need to be interactive (higher z-index)
+          if (!_isInSafeZoneMode) ...[
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LocationButton(mapboxMapController: mapboxMapController),
+                  const SizedBox(height: 10),
+                  DirectionsButton(),
+                  const SizedBox(height: 10),
+                  SafeHomeButton(),
                 ],
               ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8.0),
-                  onTap: _toggleSidebar,
+            ),
+
+            Positioned(
+              top: 50,
+              left: 20,
+              child: GestureDetector(
+                onTap: _toggleSidebar,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(
-                        Colors.black54, // Same gray color used by other icons
-                        BlendMode.srcIn,
-                      ),
-                      child: Image.asset(
-                        'lib/assets/sidebarthick.jpg',
-                        width: 24,
-                        height: 24,
-                      ),
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset(
+                      'lib/assets/sidebarthick.jpg',
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.contain,
+                      color: Colors.grey[600],
+                      colorBlendMode: BlendMode.srcIn,
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-
-          // Control buttons in bottom right
-          Positioned(
-            right: 16,
-            bottom: 30,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // My Location Button
-                LocationButton(mapboxMapController: mapboxMapController),
-
-                const SizedBox(height: 8),
-                
-                // Safe Home Button
-                const SafeHomeButton(),
-                
-                const SizedBox(height: 8),
-
-                // Directions Button
-                const DirectionsButton(),
-              ],
+          ] else ...[
+            Positioned(
+              right: 10,
+              top: MediaQuery.of(context).size.height / 2 - 140,
+              child: SafeZoneToolbar(
+                initialPanDisabled: _isPanDisabled,
+                onPanToggled: (isPanDisabled) {
+                  setState(() {
+                    _isPanDisabled = isPanDisabled;
+                  });
+                },
+                onMapToggled: _handleMapToggle,
+                onClosePressed: _exitSafeZoneMode,
+                onSavePressed: _saveAndExitSafeZoneInPlace, // Use the new method for check button
+              ),
             ),
-          ),
+          ],
 
-          // Sidebar overlay - always present but animated
-          SlideTransition(
-            position: _sidebarSlideAnimation,
-            child: Sidebar(onClose: _closeSidebar),
-          ),
+          if (_isSidebarOpen && !_isInSafeZoneMode)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _closeSidebar,
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ),
+            ),
+
+          if (_isSidebarOpen && !_isInSafeZoneMode)
+            SlideTransition(
+              position: _sidebarSlideAnimation,
+              child: Sidebar(onClose: _closeSidebar),
+            ),
         ],
       ),
     );
@@ -653,5 +698,192 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
 
     debugPrint('Position tracking setup complete');
+  }
+
+
+  void flyToSafeZone(double latitude, double longitude, String locationName, {int? safeZoneId}) async {
+    if (mapboxMapController != null) {
+      debugPrint('Flying to safe zone: $locationName at $latitude, $longitude');
+      
+      // Store the safe zone ID and name for later use
+      setState(() {
+        _isInSafeZoneMode = true;
+        _currentSafeZoneId = safeZoneId;
+        _currentSafeZoneName = locationName;
+      });
+      
+      // Disable map gestures immediately when entering safe zone mode
+      _handleMapToggle(true);
+      
+      mapboxMapController!.flyTo(
+        mp.CameraOptions(
+          pitch: 60.0,
+          bearing: 0.0,
+          zoom: 18.0,
+          center: mp.Point(
+            coordinates: mp.Position(longitude, latitude),
+          ),
+        ),
+        mp.MapAnimationOptions(duration: 3000),
+      );
+
+      await Future.delayed(const Duration(milliseconds: 2000));
+
+      mapboxMapController!.flyTo(
+        mp.CameraOptions(
+          pitch: 0.0,
+        ),
+        mp.MapAnimationOptions(duration: 1500),
+      );
+
+      await BoundingBoxWidget.addGreenDotToMap(mapboxMapController!, latitude, longitude);
+    }
+  }
+
+  void _handleMapToggle(bool isDisabled) {
+    if (mapboxMapController != null) {
+      // Configure map gestures based on the disabled state
+      mapboxMapController!.gestures.updateSettings(
+        mp.GesturesSettings(
+          rotateEnabled: !isDisabled,
+          scrollEnabled: !isDisabled,
+          doubleTapToZoomInEnabled: !isDisabled,
+          doubleTouchToZoomOutEnabled: !isDisabled,
+          quickZoomEnabled: !isDisabled,
+          pinchToZoomEnabled: !isDisabled,
+        ),
+      );
+      
+      debugPrint('Map gestures set to ${isDisabled ? 'disabled' : 'enabled'}');
+    }
+  }
+
+  // Exit safe zone mode and return camera to normal view
+  void _exitSafeZoneMode() async {
+    debugPrint('Exiting safe zone mode');
+    
+    // First exit safe zone mode immediately to hide toolbar and show regular UI
+    setState(() {
+      _isInSafeZoneMode = false;
+    });
+    
+    // Re-enable map gestures
+    _handleMapToggle(false);
+    
+    // Continue with camera animation in the background
+    try {
+      final position = await gl.Geolocator.getCurrentPosition(
+        desiredAccuracy: gl.LocationAccuracy.high,
+      );
+      
+      // First animate to user location (keeping pitch at 0)
+      mapboxMapController!.flyTo(
+        mp.CameraOptions(
+          center: mp.Point(
+            coordinates: mp.Position(position.longitude, position.latitude),
+          ),
+          zoom: 18.0,
+          pitch: 0.0, // Keep pitch at 0 for first animation
+          bearing: 0.0,
+        ),
+        mp.MapAnimationOptions(duration: 1500), // Half the total duration
+      );
+      
+      // Wait for first animation to complete
+      await Future.delayed(const Duration(milliseconds: 1500));
+      
+      // Then animate the pitch to 60 degrees
+      mapboxMapController!.flyTo(
+        mp.CameraOptions(
+          pitch: 60.0, // Now change pitch to 60
+        ),
+        mp.MapAnimationOptions(duration: 1500), // Other half of the duration
+      );
+      
+    } catch (e) {
+      debugPrint('Error getting location when exiting safe zone: $e');
+      // The safe zone mode is already exited, so we don't need to do anything here
+    }
+  }
+
+  // Method to save the current bounding box to database
+  void _saveBoundingBox() async {
+    if (_currentSafeZoneId == null || _currentSafeZoneName == null) {
+      debugPrint('Cannot save bounding box: No safe zone selected');
+      return;
+    }
+    
+    try {
+      await BoundingBoxWidget.saveBoundingBoxToDatabase(
+        _currentSafeZoneId!,
+        _currentSafeZoneName!,
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bounding box saved successfully!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error saving bounding box: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error saving bounding box'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // Save bounding box and exit safe zone mode without changing location
+  void _saveAndExitSafeZoneInPlace() async {
+    debugPrint('Saving and exiting safe zone mode while staying in place');
+    
+    // First save the bounding box
+    if (_currentSafeZoneId == null || _currentSafeZoneName == null) {
+      debugPrint('Cannot save bounding box: No safe zone selected');
+      // Even if we can't save, still exit safe zone mode
+    } else {
+      try {
+        await BoundingBoxWidget.saveBoundingBoxToDatabase(
+          _currentSafeZoneId!,
+          _currentSafeZoneName!,
+        );
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bounding box saved successfully!'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        debugPrint('Error saving bounding box: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error saving bounding box'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+    
+    // Exit safe zone mode immediately to hide toolbar and show regular UI
+    setState(() {
+      _isInSafeZoneMode = false;
+    });
+    
+    // Re-enable map gestures
+    _handleMapToggle(false);
+    
+    // Animate just the pitch without changing position
+    mapboxMapController!.flyTo(
+      mp.CameraOptions(
+        pitch: 60.0, // Change to 60 degree pitch
+      ),
+      mp.MapAnimationOptions(duration: 1500), 
+    );
   }
 }

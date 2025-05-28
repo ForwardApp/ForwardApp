@@ -177,7 +177,7 @@ class _SafeHomeScreenState extends State<SafeHomeScreen> {
               Expanded(
                 child: Container(
                   color: Colors.grey[100],
-                  child: const SafeZoneList(),
+                  child: SafeZoneList(),
                 ),
               ),
             ],

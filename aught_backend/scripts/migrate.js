@@ -52,6 +52,30 @@ async function createInitialTable() {
         
         CREATE POLICY "Enable all operations for safe zone" ON safe_zone
           FOR ALL USING (true);
+
+        -- Bounding box table for storing rectangular areas
+        CREATE TABLE IF NOT EXISTS bounding_box (
+          id SERIAL PRIMARY KEY,
+          point_a_lat DOUBLE PRECISION NOT NULL,
+          point_a_lng DOUBLE PRECISION NOT NULL,
+          point_b_lat DOUBLE PRECISION NOT NULL,
+          point_b_lng DOUBLE PRECISION NOT NULL,
+          point_c_lat DOUBLE PRECISION NOT NULL,
+          point_c_lng DOUBLE PRECISION NOT NULL,
+          point_d_lat DOUBLE PRECISION NOT NULL,
+          point_d_lng DOUBLE PRECISION NOT NULL,
+          safe_zone_id INTEGER REFERENCES safe_zone(id) ON DELETE CASCADE,
+          location_name TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_bounding_box_safe_zone_id ON bounding_box(safe_zone_id);
+        
+        ALTER TABLE bounding_box ENABLE ROW LEVEL SECURITY;
+        
+        CREATE POLICY "Enable all operations for bounding box" ON bounding_box
+          FOR ALL USING (true);
       `
         });
 
@@ -64,6 +88,7 @@ async function createInitialTable() {
         console.log('- aught_table with columns: id, created_at');
         console.log('- location_list table for storing user routes');
         console.log('- safe_zone table for storing safe home locations');
+        console.log('- bounding_box table for storing rectangular areas');
 
     } catch (error) {
         console.error('Migration failed:', error.message);
