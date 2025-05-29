@@ -171,8 +171,8 @@ class _LocationButtonState extends State<LocationButton> {
       // Update location component settings
       await widget.mapboxMapController!.location.updateSettings(
         mp.LocationComponentSettings(
-          enabled: true,
-          pulsingEnabled: true,
+          enabled: false, // Keep location component disabled
+          pulsingEnabled: false, // Disable default pulsing effect
           puckBearingEnabled: false,
         ),
       );

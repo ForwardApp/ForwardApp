@@ -5,12 +5,9 @@ fllutter
 
 
 
-database of save or saved places(node js)POSTGIS
-schedule saved in the database and transportation type
-
-
-
-zones(make radius based on data from database)
+database of save or saved places(node js)POSTGIS**************
+schedule saved in the database and transportation type*********
+zones(make radius based on data from database)**********
 get location of another thing or person(Socket.IO with Node.js)
 path from point one to two(get places from db)
 notification
@@ -74,9 +71,23 @@ Future<Uint8List> loadHQMarkerImage() async {
 }
 
 
+REAL LOCATION PUCK
+await mapboxMapController!.location.updateSettings(
+        mp.LocationComponentSettings(
+          enabled: true,
+          pulsingEnabled: true,
+          puckBearingEnabled:
+              false, // Enable bearing for more accurate tracking
+        ),
+      );
+
+_userImageAnnotation!.iconOffset = [
+        0.0,
+        0.0,
+      ]; // Keep the image above the puck
 
 
-
+FAKE LOCATION PUCK
 locationPuck: mp.LocationPuck(
             // Use only 2D puck for better compatibility
             locationPuck2D: mp.LocationPuck2D(
@@ -102,3 +113,10 @@ Imagine you’re developing a delivery route-planning app. Initially, you might 
 
 
 my phone uses its built-in GPS to obtain its own location and sends that directly to your server.
+
+
+flutter devices
+flutter run -d all
+
+flutter run -d emulator-5554
+flutter run -d ABC123

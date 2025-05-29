@@ -47,6 +47,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   late AnimationController _sidebarAnimationController;
   late Animation<Offset> _sidebarSlideAnimation;
 
+  // Add these variables to your class state
+  late AnimationController _pulseAnimationController;
+  mp.CircleAnnotationManager? _pulseCircleManager;
+  mp.CircleAnnotation? _pulseCircle;
+
   mp.PointAnnotationManager? _pointAnnotationManager;
   mp.PointAnnotation? _userImageAnnotation;
   mp.PointAnnotationManager? _greenDotManager;
@@ -93,17 +98,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             curve: Curves.easeInOut,
           ),
         );
+    
+    // Initialize pulse animation controller
+    _pulseAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+    
+    // Add listener to update pulse animation
+    _pulseAnimationController.addListener(_updatePulseEffect);
   }
 
   @override
   void dispose() {
     userPositionStream?.cancel();
     _positionUpdateTimer?.cancel();
-    _zoomCheckTimer?.cancel(); // Add this line
+    _zoomCheckTimer?.cancel();
     _sidebarAnimationController.dispose();
+    _pulseAnimationController.dispose();
     // Clean up annotation resources
     _pointAnnotationManager = null;
     _userImageAnnotation = null;
+    _pulseCircleManager = null;
     super.dispose();
   }
 
@@ -426,6 +442,26 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         desiredAccuracy: gl.LocationAccuracy.high,
       );
 
+      // Create pulse circle manager if needed
+      if (_pulseCircleManager == null) {
+        _pulseCircleManager = await mapboxMapController?.annotations
+            .createCircleAnnotationManager();
+      }
+      
+      // Create pulse circle annotation options
+      final pulseCircleOptions = mp.CircleAnnotationOptions(
+        geometry: mp.Point(
+          coordinates: mp.Position(position.longitude, position.latitude),
+        ),
+        circleRadius: 15.0,
+        circleColor: 0xFF007AFF, // Blue color
+        circleOpacity: 0.7,
+        circleStrokeWidth: 0, // No stroke
+      );
+      
+      // Create pulse circle annotation FIRST
+      _pulseCircle = await _pulseCircleManager?.create(pulseCircleOptions);
+
       // Create point annotation manager only once
       if (_pointAnnotationManager == null) {
         _pointAnnotationManager = await mapboxMapController?.annotations
@@ -438,17 +474,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         size: 600,
       );
 
-      // Create point annotation options with vertical offset
+      // Create point annotation options (no vertical offset)
       final pointAnnotationOptions = mp.PointAnnotationOptions(
         image: imageData,
         iconSize: 0.3,
-        iconOffset: [0.0, -50.0], // Move the image up by 50 pixels
         geometry: mp.Point(
           coordinates: mp.Position(position.longitude, position.latitude),
         ),
       );
 
-      // Create the annotation and store reference
+      // Create the image annotation SECOND (will be on top)
       _userImageAnnotation = await _pointAnnotationManager?.create(
         pointAnnotationOptions,
       );
@@ -503,25 +538,57 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
 
     try {
-      // Update the annotation geometry directly (remove zoom check from here since it's handled by the timer)
+      // Update the annotation geometry directly
       _userImageAnnotation!.geometry = mp.Point(
         coordinates: mp.Position(position.longitude, position.latitude),
       );
 
-      // Ensure the offset is maintained when updating
-      _userImageAnnotation!.iconOffset = [
-        0.0,
-        -100.0,
-      ]; // Keep the image above the puck
-
       // Update the annotation on the map
       await _pointAnnotationManager!.update(_userImageAnnotation!);
+      
+      // Also update pulse circle position if it exists
+      if (_pulseCircle != null && _pulseCircleManager != null) {
+        _pulseCircle!.geometry = mp.Point(
+          coordinates: mp.Position(position.longitude, position.latitude),
+        );
+        await _pulseCircleManager!.update(_pulseCircle!);
+      }
 
       debugPrint(
-        'Updated annotation position to: ${position.latitude}, ${position.longitude}',
+        'Updated image position to: ${position.latitude}, ${position.longitude}',
       );
     } catch (e) {
       debugPrint('Error updating image annotation position: $e');
+    }
+  }
+
+  // Add this method to update the pulse effect
+  void _updatePulseEffect() {
+    if (_pulseCircle == null || _pulseCircleManager == null || mapboxMapController == null) return;
+    
+    try {
+      // Calculate pulse size and opacity based on animation value
+      // As animation progresses, make circle larger and more transparent
+      final animationValue = _pulseAnimationController.value;
+      final baseRadius = 15.0; // Base radius of image
+      final maxRadius = 45.0;  
+      
+      // Increase radius and decrease opacity as animation progresses
+      final currentRadius = baseRadius + (maxRadius - baseRadius) * animationValue;
+      final currentOpacity = 1.0 - animationValue; // Fade out as it expands
+      
+      // Update circle properties
+      _pulseCircle!.circleRadius = currentRadius;
+      _pulseCircle!.circleOpacity = currentOpacity;
+      
+      // Convert RGBA to packed ARGB integer
+      final alpha = (currentOpacity * 255).toInt();
+      _pulseCircle!.circleColor = 0xFF007AFF; // Fixed blue color
+      
+      // Update the annotation on the map
+      _pulseCircleManager!.update(_pulseCircle!);
+    } catch (e) {
+      debugPrint('Error updating pulse effect: $e');
     }
   }
 
@@ -543,50 +610,41 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
       if (permission == gl.LocationPermission.denied ||
           permission == gl.LocationPermission.deniedForever) {
-        // Request permission - this will show Android permission dialog
-        final newPermission = await gl.Geolocator.requestPermission();
-
-        if (newPermission == gl.LocationPermission.denied ||
-            newPermission == gl.LocationPermission.deniedForever) {
-          debugPrint('Location permission denied');
-          return;
-        }
+        final hasPermission = await _requestLocationPermission();
+        if (!hasPermission) return;
       }
 
       // Check if location services are enabled
       final serviceEnabled = await gl.Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        debugPrint('Location services are disabled');
+        _showLocationServiceDialog();
         return;
       }
 
       // Permission granted - get location and animate
       final position = await gl.Geolocator.getCurrentPosition(
-        desiredAccuracy: gl.LocationAccuracy.best, // Changed to best accuracy
+        desiredAccuracy: gl.LocationAccuracy.high,
       );
 
-      // Update location component settings to keep the default blue/white puck
+      // Update location component settings to DISABLE the default blue/white puck
       await mapboxMapController!.location.updateSettings(
         mp.LocationComponentSettings(
-          enabled: true,
-          pulsingEnabled: true,
-          puckBearingEnabled:
-              false, // Enable bearing for more accurate tracking
-          // Remove the locationPuck customization to keep the default blue/white puck
+          enabled: false, // Important: disable default location puck
+          pulsingEnabled: false, // Disable pulsing effect
         ),
       );
 
       // Animate to user's location with same animation as location button
       mapboxMapController!.flyTo(
         mp.CameraOptions(
-          pitch: 60.0,
-          bearing: 0.0,
-          zoom: 18.0,
           center: mp.Point(
             coordinates: mp.Position(position.longitude, position.latitude),
           ),
+          zoom: 15.0,
+          bearing: 0.0,
+          pitch: 60.0,
         ),
-        mp.MapAnimationOptions(duration: 3000),
+        mp.MapAnimationOptions(duration: 2000),
       );
 
       // Start position tracking AFTER the map has loaded and camera is set

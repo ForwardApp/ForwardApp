@@ -76,6 +76,23 @@ async function createInitialTable() {
         
         CREATE POLICY "Enable all operations for bounding box" ON bounding_box
           FOR ALL USING (true);
+
+        -- Device locations table for tracking multiple devices
+        CREATE TABLE IF NOT EXISTS device_locations (
+          id SERIAL PRIMARY KEY,
+          device_id TEXT NOT NULL,
+          device_name TEXT,
+          latitude DOUBLE PRECISION NOT NULL,
+          longitude DOUBLE PRECISION NOT NULL,
+          timestamp TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_device_locations_device_id ON device_locations(device_id);
+        CREATE INDEX IF NOT EXISTS idx_device_locations_timestamp ON device_locations(timestamp);
+
+        ALTER TABLE device_locations ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Enable all operations for device_locations" ON device_locations
+          FOR ALL USING (true);
       `
         });
 
@@ -89,6 +106,7 @@ async function createInitialTable() {
         console.log('- location_list table for storing user routes');
         console.log('- safe_zone table for storing safe home locations');
         console.log('- bounding_box table for storing rectangular areas');
+        console.log('- device_locations table for tracking multiple devices');
 
     } catch (error) {
         console.error('Migration failed:', error.message);
