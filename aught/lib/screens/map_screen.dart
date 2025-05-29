@@ -14,6 +14,7 @@ import '../widgets/sidebar.dart';
 import '../services/image_marker_service.dart';
 import '../widgets/bounding_box.dart';
 import '../widgets/safe_zone_toolbar.dart';
+import '../services/supabase_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -315,8 +316,106 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
     // Add image annotation at current location
     await _addImageAnnotation();
+    
+    // Load and display saved bounding boxes from database
+    await _loadAndDisplayBoundingBoxes();
   }
 
+  // Add method to load and display bounding boxes from database
+  Future<void> _loadAndDisplayBoundingBoxes() async {
+    try {
+      // Fetch bounding boxes from database
+      final boundingBoxes = await SupabaseService.getBoundingBoxes();
+      
+      if (boundingBoxes.isEmpty) {
+        debugPrint('No bounding boxes found in database');
+        return;
+      }
+      
+      debugPrint('Loaded ${boundingBoxes.length} bounding boxes from database');
+      
+      // Create polygon manager if needed
+      if (_polygonManager == null && mapboxMapController != null) {
+        _polygonManager = await mapboxMapController!.annotations.createPolygonAnnotationManager();
+      } else if (_polygonManager != null) {
+        // Clear all existing polygons first to prevent stacking
+        await _polygonManager!.deleteAll();
+      }
+      
+      // Create line manager if needed for borders
+      if (_lineManager == null && mapboxMapController != null) {
+        _lineManager = await mapboxMapController!.annotations.createPolylineAnnotationManager();
+      } else if (_lineManager != null) {
+        // Clear all existing lines first
+        await _lineManager!.deleteAll();
+      }
+      
+      // Display each bounding box on the map
+      for (final box in boundingBoxes) {
+        await _displayBoundingBox(box);
+      }
+    } catch (e) {
+      debugPrint('Error loading bounding boxes: $e');
+    }
+  }
+  
+  // Add polygon manager
+  mp.PolygonAnnotationManager? _polygonManager;
+  // Add polyline manager for thick borders
+  mp.PolylineAnnotationManager? _lineManager;
+  
+  // Display a single bounding box on the map
+  Future<void> _displayBoundingBox(Map<String, dynamic> boxData) async {
+    if (mapboxMapController == null || _polygonManager == null) return;
+    
+    try {
+      // Create the polygon fill
+      final polygonOptions = mp.PolygonAnnotationOptions(
+        geometry: mp.Polygon(
+          coordinates: [
+            [
+              mp.Position(boxData['point_a_lng'], boxData['point_a_lat']), // Top left
+              mp.Position(boxData['point_b_lng'], boxData['point_b_lat']), // Top right
+              mp.Position(boxData['point_d_lng'], boxData['point_d_lat']), // Bottom right
+              mp.Position(boxData['point_c_lng'], boxData['point_c_lat']), // Bottom left
+              mp.Position(boxData['point_a_lng'], boxData['point_a_lat']), // Close the polygon
+            ]
+          ],
+        ),
+        fillColor: 0x6000FF00, // Semi-transparent green fill
+        fillOpacity: 0.6,
+      );
+      
+      await _polygonManager!.create(polygonOptions);
+      
+      // Now create a line annotation for the border
+      if (_lineManager == null && mapboxMapController != null) {
+        _lineManager = await mapboxMapController!.annotations.createPolylineAnnotationManager();
+      }
+      
+      // Create a thick red border as a separate line annotation
+      final lineOptions = mp.PolylineAnnotationOptions(
+        geometry: mp.LineString(
+          coordinates: [
+            mp.Position(boxData['point_a_lng']- 0.0000025, boxData['point_a_lat']), // Top left
+            mp.Position(boxData['point_b_lng'], boxData['point_b_lat']), // Top right
+            mp.Position(boxData['point_d_lng'], boxData['point_d_lat']), // Bottom right
+            mp.Position(boxData['point_c_lng'], boxData['point_c_lat']), // Bottom left
+            mp.Position(boxData['point_a_lng'], boxData['point_a_lat']), // Close the polygon
+          ],
+        ),
+        lineColor: 0xFFFF0000, // Solid red color
+        lineWidth: 4.0, // Thick line
+      );
+      
+      await _lineManager!.create(lineOptions);
+      
+      final locationName = boxData['location_name'] ?? 'Unknown location';
+      debugPrint('Displayed bounding box for $locationName on map');
+    } catch (e) {
+      debugPrint('Error displaying bounding box: $e');
+    }
+  }
 
   Future<void> _addImageAnnotation() async {
     if (mapboxMapController == null) return;
@@ -707,36 +806,59 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       
       // Store the safe zone ID and name for later use
       setState(() {
-        _isInSafeZoneMode = true;
         _currentSafeZoneId = safeZoneId;
         _currentSafeZoneName = locationName;
       });
       
-      // Disable map gestures immediately when entering safe zone mode
-      _handleMapToggle(true);
+      // First check if this safe zone already has a bounding box
+      bool hasBoundingBox = false;
+      if (safeZoneId != null) {
+        hasBoundingBox = await SupabaseService.hasBoundingBoxForSafeZone(safeZoneId);
+      }
       
+      // Fly to the location with appropriate pitch based on whether we have a bounding box
       mapboxMapController!.flyTo(
         mp.CameraOptions(
-          pitch: 60.0,
-          bearing: 0.0,
-          zoom: 18.0,
-          center: mp.Point(
-            coordinates: mp.Position(longitude, latitude),
-          ),
-        ),
-        mp.MapAnimationOptions(duration: 3000),
-      );
-
-      await Future.delayed(const Duration(milliseconds: 2000));
-
-      mapboxMapController!.flyTo(
-        mp.CameraOptions(
-          pitch: 0.0,
+          center: mp.Point(coordinates: mp.Position(longitude, latitude)),
+          zoom: 15.0,
+          bearing: 0,
+          pitch: hasBoundingBox ? 60.0 : 0.0, // Use 60 degree pitch if bounding box exists
         ),
         mp.MapAnimationOptions(duration: 1500),
       );
 
-      await BoundingBoxWidget.addGreenDotToMap(mapboxMapController!, latitude, longitude);
+      // Only enter safe zone mode if there's no existing bounding box
+      if (!hasBoundingBox) {
+        debugPrint('No bounding box found for this safe zone, entering safe zone mode');
+        
+        // Wait for the camera to finish moving
+        await Future.delayed(const Duration(milliseconds: 2000));
+        
+        // Enter safe zone mode
+        setState(() {
+          _isInSafeZoneMode = true;
+        });
+        
+        // Disable map gestures when entering safe zone mode
+        _handleMapToggle(true);
+        
+        // Zoom in closer for better bounding box editing
+        mapboxMapController!.flyTo(
+          mp.CameraOptions(
+            center: mp.Point(coordinates: mp.Position(longitude, latitude)),
+            zoom: 17.0,
+          ),
+          mp.MapAnimationOptions(duration: 1000),
+        );
+
+        // Add bounding box overlay
+        await BoundingBoxWidget.addGreenDotToMap(mapboxMapController!, latitude, longitude);
+      } else {
+        debugPrint('Bounding box already exists for this safe zone, staying in normal mode with 60 degree pitch');
+        
+        // Just load and refresh the bounding boxes to ensure this one is visible
+        await _loadAndDisplayBoundingBoxes();
+      }
     }
   }
 
@@ -762,6 +884,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   void _exitSafeZoneMode() async {
     debugPrint('Exiting safe zone mode');
     
+    // Clear the bounding box when exiting without saving
+    await BoundingBoxWidget.clearBoundingBox();
+    
     // First exit safe zone mode immediately to hide toolbar and show regular UI
     setState(() {
       _isInSafeZoneMode = false;
@@ -779,14 +904,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       // First animate to user location (keeping pitch at 0)
       mapboxMapController!.flyTo(
         mp.CameraOptions(
-          center: mp.Point(
-            coordinates: mp.Position(position.longitude, position.latitude),
-          ),
+          center: mp.Point(coordinates: mp.Position(position.longitude, position.latitude)),
           zoom: 18.0,
-          pitch: 0.0, // Keep pitch at 0 for first animation
-          bearing: 0.0,
+          pitch: 0.0,
+          bearing: 0.0
         ),
-        mp.MapAnimationOptions(duration: 1500), // Half the total duration
+        mp.MapAnimationOptions(duration: 1500),
       );
       
       // Wait for first animation to complete
@@ -795,9 +918,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       // Then animate the pitch to 60 degrees
       mapboxMapController!.flyTo(
         mp.CameraOptions(
-          pitch: 60.0, // Now change pitch to 60
+          center: mp.Point(coordinates: mp.Position(position.longitude, position.latitude)),
+          zoom: 18.0,
+          pitch: 60.0,
         ),
-        mp.MapAnimationOptions(duration: 1500), // Other half of the duration
+        mp.MapAnimationOptions(duration: 1500),
       );
       
     } catch (e) {
@@ -852,9 +977,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           _currentSafeZoneName!,
         );
         
+        // Clear only the dots but keep the polygon
+        await BoundingBoxWidget.clearDotsOnly();
+        
+        // Reload bounding boxes from database to ensure they display correctly
+        await _loadAndDisplayBoundingBoxes();
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Bounding box saved successfully!'),
+            content: Text('Safe zone boundary saved successfully'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -862,7 +993,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         debugPrint('Error saving bounding box: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Error saving bounding box'),
+            content: Text('Failed to save safe zone boundary'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 2),
           ),

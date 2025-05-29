@@ -144,7 +144,7 @@ class BoundingBoxWidget extends StatefulWidget {
         await _greenDotManager!.create(dotOptions);
       }
       
-      // Create polygon options
+      // Create polygon options with more visible green color
       final polygonOptions = mp.PolygonAnnotationOptions(
         geometry: mp.Polygon(
           coordinates: [
@@ -157,9 +157,9 @@ class BoundingBoxWidget extends StatefulWidget {
             ]
           ],
         ),
-        fillColor: 0x4000FF00, 
-        fillOpacity: 0.3,
-        fillOutlineColor: 0xFF00FF00, // Solid green border
+        fillColor: 0x6000FF00, // More visible green (60% opacity)
+        fillOpacity: 0.6,
+        fillOutlineColor: 0xFF00CC00, // Slightly darker green border
       );
       
       // Instead of trying to delete the old polygon (which causes errors), 
@@ -355,6 +355,59 @@ class BoundingBoxWidget extends StatefulWidget {
       debugPrint('Bounding box saved to database with safe zone ID: $safeZoneId');
     } catch (e) {
       debugPrint('Failed to save bounding box: $e');
+    }
+  }
+  
+  // Method to clear the current bounding box from the map
+  static Future<void> clearBoundingBox() async {
+    try {
+      // Clear dots
+      if (_greenDotManager != null) {
+        await _greenDotManager!.deleteAll();
+        _greenDotManager = null;
+      }
+      
+      // Clear polygon
+      if (_polygonManager != null) {
+        await _polygonManager!.deleteAll();
+        _polygonManager = null;
+      }
+      
+      // Reset coordinates
+      _topLeftLat = null;
+      _topLeftLng = null;
+      _topRightLat = null;
+      _topRightLng = null;
+      _bottomRightLat = null;
+      _bottomRightLng = null;
+      _bottomLeftLat = null;
+      _bottomLeftLng = null;
+      
+      _isDragging = false;
+      _draggingCornerIndex = -1;
+      
+      debugPrint('Bounding box cleared from map');
+    } catch (e) {
+      debugPrint('Error clearing bounding box: $e');
+    }
+  }
+  
+  // Method to clear only the dots but keep the polygon
+  static Future<void> clearDotsOnly() async {
+    try {
+      // Clear dots only
+      if (_greenDotManager != null) {
+        await _greenDotManager!.deleteAll();
+        _greenDotManager = null;
+      }
+      
+      // Reset dragging state but don't clear polygon or coordinates
+      _isDragging = false;
+      _draggingCornerIndex = -1;
+      
+      debugPrint('Dots cleared from map while keeping polygon');
+    } catch (e) {
+      debugPrint('Error clearing dots: $e');
     }
   }
 }

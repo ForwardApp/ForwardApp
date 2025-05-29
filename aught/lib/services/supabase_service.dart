@@ -228,4 +228,31 @@ class SupabaseService {
       return [];
     }
   }
+
+  static Future<bool> hasBoundingBoxForSafeZone(int safeZoneId) async {
+    try {
+      if (!_isInitialized) {
+        debugPrint('Auto-initializing Supabase before checking bounding box...');
+        await initialize();
+      }
+      
+      if (!_isInitialized) {
+        throw Exception('Could not initialize Supabase service');
+      }
+
+      final response = await client
+          .from('bounding_box')
+          .select('id')
+          .eq('safe_zone_id', safeZoneId)
+          .limit(1)
+          .maybeSingle();
+      
+      // If response is not null, then a bounding box exists for this safe zone
+      debugPrint('Checking if bounding box exists for safe zone ID: $safeZoneId - ${response != null ? 'Found' : 'Not found'}');
+      return response != null;
+    } catch (e) {
+      debugPrint('Error checking for bounding box: $e');
+      return false;
+    }
+  }
 }
