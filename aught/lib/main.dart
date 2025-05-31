@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'services/supabase_service.dart';
+import 'services/tracking_service.dart';
+import 'services/device_location.dart';
 
 void main() async {
   // This needs to be called before any platform channels are accessed
@@ -20,10 +22,19 @@ void main() async {
       debugPrint('Mapbox initialized');
     }
     
+    // Initialize device info first and wait for it to complete
+    debugPrint('Initializing device info...');
+    await DeviceLocation.initializeDeviceInfo();
+    debugPrint('Device info initialized');
+    
     // Try to initialize Supabase but don't block app launch if it fails
     try {
       await SupabaseService.initialize();
       debugPrint('Supabase initialized successfully');
+      
+      // Initialize tracking service after Supabase
+      await TrackingService().initialize();
+      debugPrint('Tracking service initialized');
     } catch (e) {
       // Just log the error but continue app launch
       debugPrint('Supabase initialization failed: $e');

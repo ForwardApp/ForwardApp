@@ -82,17 +82,44 @@ async function createInitialTable() {
           id SERIAL PRIMARY KEY,
           device_id TEXT NOT NULL,
           device_name TEXT,
+          generated_id TEXT NOT NULL,
+          tracking_active BOOLEAN DEFAULT true,
           latitude DOUBLE PRECISION NOT NULL,
           longitude DOUBLE PRECISION NOT NULL,
           timestamp TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_device_locations_device_id ON device_locations(device_id);
+        CREATE INDEX IF NOT EXISTS idx_device_locations_generated_id ON device_locations(generated_id);
         CREATE INDEX IF NOT EXISTS idx_device_locations_timestamp ON device_locations(timestamp);
 
         ALTER TABLE device_locations ENABLE ROW LEVEL SECURITY;
         CREATE POLICY "Enable all operations for device_locations" ON device_locations
           FOR ALL USING (true);
+          
+        -- Connected devices table for tracking connections between devices
+        CREATE TABLE IF NOT EXISTS connected_devices (
+          id SERIAL PRIMARY KEY,
+          device_location_id INTEGER REFERENCES device_locations(id) ON DELETE CASCADE,
+          generated_id TEXT NOT NULL,
+          connected_device_id INTEGER REFERENCES device_locations(id) ON DELETE CASCADE,
+          connection_name TEXT,
+          trusted BOOLEAN DEFAULT false,
+          last_connected TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_connected_devices_device_location_id ON connected_devices(device_location_id);
+        CREATE INDEX IF NOT EXISTS idx_connected_devices_generated_id ON connected_devices(generated_id);
+        CREATE INDEX IF NOT EXISTS idx_connected_devices_connected_device_id ON connected_devices(connected_device_id);
+
+        ALTER TABLE connected_devices ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Enable all operations for connected_devices" ON connected_devices
+          FOR ALL USING (true);
+
+        -- Add a unique constraint to prevent duplicate connections
+        ALTER TABLE connected_devices ADD CONSTRAINT unique_device_connection 
+          UNIQUE (device_location_id, generated_id);
       `
         });
 
