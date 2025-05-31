@@ -12,6 +12,7 @@ import '../widgets/directions_button.dart';
 import '../widgets/safehome_button.dart';
 import '../widgets/sidebar.dart';
 import '../services/image_marker_service.dart';
+import '../services/custom_location_service.dart';
 import '../widgets/bounding_box.dart';
 import '../widgets/safe_zone_toolbar.dart';
 import '../services/supabase_service.dart';
@@ -120,6 +121,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     _pointAnnotationManager = null;
     _userImageAnnotation = null;
     _pulseCircleManager = null;
+    CustomLocationService.dispose();
     super.dispose();
   }
 
@@ -333,6 +335,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     // Add image annotation at current location
     await _addImageAnnotation();
     
+    // Add custom image annotation at Japan location
+    await CustomLocationService.addCustomImageAnnotations(mapboxMapController, _pulseAnimationController);
+    
     // Load and display saved bounding boxes from database
     await _loadAndDisplayBoundingBoxes();
   }
@@ -526,6 +531,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           debugPrint('Image shown at zoom: $currentZoom');
         }
       }
+      
+      // Also check custom location visibility
+      await CustomLocationService.checkCustomZoomAndUpdateVisibility(mapboxMapController);
     } catch (e) {
       debugPrint('Error checking zoom and updating visibility: $e');
     }
@@ -580,13 +588,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       // Update circle properties
       _pulseCircle!.circleRadius = currentRadius;
       _pulseCircle!.circleOpacity = currentOpacity;
+      _pulseCircle!.circleColor = 0xFF007AFF;
       
-      // Convert RGBA to packed ARGB integer
-      final alpha = (currentOpacity * 255).toInt();
-      _pulseCircle!.circleColor = 0xFF007AFF; // Fixed blue color
-      
-      // Update the annotation on the map
       _pulseCircleManager!.update(_pulseCircle!);
+      
+      // Update custom pulse effect as well
+      CustomLocationService.updateCustomPulseEffect(_pulseAnimationController);
     } catch (e) {
       debugPrint('Error updating pulse effect: $e');
     }

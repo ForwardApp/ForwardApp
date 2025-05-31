@@ -99,7 +99,7 @@ class DeviceLocation {
     _locationUpdateTimer?.cancel();
     
     // Start a timer to update location periodically
-    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 20), (timer) async {
+    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       try {
         // Check if location services are enabled
         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();

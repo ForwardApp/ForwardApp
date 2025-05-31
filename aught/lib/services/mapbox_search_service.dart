@@ -617,4 +617,36 @@ class MapboxSearchService {
   ) async {
     return _searchMapbox(query);
   }
+
+  // Reverse geocoding - Convert coordinates to address
+  static Future<String?> reverseGeocode(double latitude, double longitude) async {
+    try {
+      final accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'];
+      if (accessToken == null) {
+        print('Mapbox access token not found');
+        return null;
+      }
+
+      final url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/$longitude,$latitude.json?access_token=$accessToken&types=address,locality,place,neighborhood,poi&limit=1';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final features = data['features'] as List;
+        
+        if (features.isNotEmpty) {
+          // Return the place name (full address)
+          return features[0]['place_name'];
+        }
+        return null;
+      } else {
+        print('Failed to reverse geocode: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('Error in reverse geocoding: $e');
+      return null;
+    }
+  }
 }

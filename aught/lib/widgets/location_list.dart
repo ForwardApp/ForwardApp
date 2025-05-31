@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import 'package:geolocator/geolocator.dart';
+import '../services/mapbox_search_service.dart';
 
 class LocationList extends StatefulWidget {
-  const LocationList({super.key});
+  final Function(Map<String, dynamic>)? onLocationSelected;
+  
+  const LocationList({
+    super.key, 
+    this.onLocationSelected,
+  });
 
   @override
   State<LocationList> createState() => _LocationListState();
@@ -10,11 +17,71 @@ class LocationList extends StatefulWidget {
 
 class _LocationListState extends State<LocationList> {
   Future<List<Map<String, dynamic>>>? _locationsFuture;
+  Position? _currentUserPosition;
+  String _currentLocationAddress = "Getting current location...";
+  bool _isLoadingLocation = true;
 
   @override
   void initState() {
     super.initState();
     _locationsFuture = _fetchLocations();
+    _getCurrentLocation();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        final requestPermission = await Geolocator.requestPermission();
+        if (requestPermission == LocationPermission.denied ||
+            requestPermission == LocationPermission.deniedForever) {
+          debugPrint('Location permission denied');
+          setState(() {
+            _isLoadingLocation = false;
+            _currentLocationAddress = "Location access denied";
+          });
+          return;
+        }
+      }
+
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Location services are disabled');
+        setState(() {
+          _isLoadingLocation = false;
+          _currentLocationAddress = "Location services disabled";
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+      
+      setState(() {
+        _currentUserPosition = position;
+        _currentLocationAddress = "Getting address...";
+      });
+      
+      // Get readable address from coordinates
+      final address = await MapboxSearchService.reverseGeocode(position.latitude, position.longitude);
+      
+      setState(() {
+        _isLoadingLocation = false;
+        if (address != null && address.isNotEmpty) {
+          _currentLocationAddress = address;
+        } else {
+          // Fallback to coordinates if address lookup fails
+          _currentLocationAddress = "${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}";
+        }
+      });
+    } catch (e) {
+      debugPrint('Error getting current location: $e');
+      setState(() {
+        _isLoadingLocation = false;
+        _currentLocationAddress = "Could not determine location";
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchLocations() async {
@@ -31,9 +98,6 @@ class _LocationListState extends State<LocationList> {
           .from('location_list')
           .select()
           .order('created_at', ascending: false);
-      
-      
-
       
       final locations = List<Map<String, dynamic>>.from(response);
       debugPrint('Found ${locations.length} locations in database');
@@ -61,20 +125,92 @@ class _LocationListState extends State<LocationList> {
         
         final locations = snapshot.data ?? [];
         
-        if (locations.isEmpty) {
-          return const Center(
-            child: Text('No locations saved yet', 
-              style: TextStyle(fontSize: 16, color: Colors.grey)),
-          );
-        }
-        
         return SingleChildScrollView(
           child: Column(
-            children: locations.map((location) => 
-              _buildLocationItem(context, location)).toList(),
+            children: [
+              // Your Location at the top
+              _buildCurrentLocationItem(context),
+              
+              // Empty state message if no saved locations
+              if (locations.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text('No locations saved yet', 
+                      style: TextStyle(fontSize: 16, color: Colors.grey)),
+                  ),
+                ),
+                
+              // Saved locations
+              ...locations.map((location) => _buildLocationItem(context, location)).toList(),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCurrentLocationItem(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (_currentUserPosition != null) {
+              debugPrint('Current location tapped');
+              
+              // Call the callback with location data instead of popping
+              if (widget.onLocationSelected != null) {
+                widget.onLocationSelected!({
+                  'name': _currentLocationAddress,
+                  'address': _currentLocationAddress,
+                  'lat': _currentUserPosition!.latitude,
+                  'lng': _currentUserPosition!.longitude,
+                });
+              }
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                const Icon(Icons.my_location, color: Colors.blue, size: 24),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Your Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isLoadingLocation ? "Getting location..." : _currentLocationAddress,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: 1,
+          color: Colors.grey[300],
+        ),
+      ],
     );
   }
 

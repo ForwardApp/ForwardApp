@@ -527,7 +527,16 @@ class _DirectionsScreenState extends State<DirectionsScreen> {
               Expanded(
                 child: Container(
                   color: Colors.grey[100],
-                  child: const LocationList(),
+                  child: LocationList(
+                    onLocationSelected: (locationData) {
+                      setState(() {
+                        _location1Controller.text = locationData['name'];
+                        _location1Address = locationData['address'];
+                        _location1Lat = locationData['lat'];
+                        _location1Lng = locationData['lng'];
+                      });
+                    },
+                  ),
                 ),
               ),
             ],
