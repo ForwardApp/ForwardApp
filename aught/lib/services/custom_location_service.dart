@@ -6,6 +6,31 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'image_marker_service.dart';
 import 'supabase_service.dart';
 import 'device_location.dart';
+import 'notification_service.dart';
+
+// Helper class to track animation state - moved outside of CustomLocationService
+class _MarkerAnimation {
+  final int index;
+  final double startLat;
+  final double startLng;
+  final double endLat;
+  final double endLng;
+  final DateTime startTime;
+  Timer? timer;
+  
+  _MarkerAnimation({
+    required this.index,
+    required this.startLat,
+    required this.startLng,
+    required this.endLat,
+    required this.endLng,
+  }) : startTime = DateTime.now();
+  
+  void dispose() {
+    timer?.cancel();
+    timer = null;
+  }
+}
 
 class CustomLocationService {
   static List<mp.PointAnnotationManager?> _customPointAnnotationManagers = [];
@@ -16,6 +41,10 @@ class CustomLocationService {
   static mp.MapboxMap? _mapController;
   static AnimationController? _pulseController;
   static Map<int, int> _deviceIdToIndexMap = {};
+  
+  // Animation-related fields
+  static Map<int, _MarkerAnimation> _markerAnimations = {};
+  static const Duration _animationDuration = Duration(seconds: 10);
 
   static Future<void> addCustomImageAnnotations(mp.MapboxMap? mapboxMapController, AnimationController pulseController) async {
     if (mapboxMapController == null) return;
@@ -28,6 +57,7 @@ class CustomLocationService {
     _customPulseCircleManagers.clear();
     _customPulseCircles.clear();
     _deviceIdToIndexMap.clear();
+    _markerAnimations.clear();
 
     await _loadConnectedDevices();
     _setupRealtimeSubscription();
@@ -111,6 +141,7 @@ class CustomLocationService {
       final lat = newRecord['latitude']?.toDouble();
       final lng = newRecord['longitude']?.toDouble();
       final trackingActive = newRecord['tracking_active'];
+      final deviceName = newRecord['device_name'] ?? 'Unknown Device';
       
       if (lat == null || lng == null || trackingActive != true) return;
       
@@ -118,26 +149,105 @@ class CustomLocationService {
       
       if (index != null && 
           index < _customImageAnnotations.length && 
-          _customImageAnnotations[index] != null &&
-          index < _customPointAnnotationManagers.length &&
-          _customPointAnnotationManagers[index] != null &&
-          index < _customPulseCircles.length &&
-          _customPulseCircles[index] != null &&
-          index < _customPulseCircleManagers.length &&
-          _customPulseCircleManagers[index] != null) {
+          _customImageAnnotations[index] != null) {
         
-        final newPosition = mp.Point(coordinates: mp.Position(lng, lat));
+        // Get current position for animation
+        final currentAnnotation = _customImageAnnotations[index]!;
+        final currentGeometry = currentAnnotation.geometry;
+        final currentLat = currentGeometry.coordinates.lat.toDouble();
+        final currentLng = currentGeometry.coordinates.lng.toDouble();
         
-        _customImageAnnotations[index]!.geometry = newPosition;
-        await _customPointAnnotationManagers[index]!.update(_customImageAnnotations[index]!);
+        // Start smooth animation to new position
+        _startMarkerAnimation(
+          deviceId: deviceId,
+          index: index,
+          startLat: currentLat,
+          startLng: currentLng,
+          endLat: lat,
+          endLng: lng,
+        );
         
-        _customPulseCircles[index]!.geometry = newPosition;
-        await _customPulseCircleManagers[index]!.update(_customPulseCircles[index]!);
-        
-        debugPrint('Updated marker position for device $deviceId to: $lat, $lng');
+        // Check location against safe zones and send notifications
+        await NotificationService.checkDeviceLocationAgainstSafeZones(
+          deviceId: deviceId,
+          latitude: lat,
+          longitude: lng,
+          deviceName: deviceName,
+        );
       }
     } catch (e) {
       debugPrint('Error handling device location update: $e');
+    }
+  }
+  
+  static void _startMarkerAnimation({
+    required int deviceId,
+    required int index,
+    required double startLat,
+    required double startLng,
+    required double endLat,
+    required double endLng,
+  }) {
+    // Cancel any existing animation for this device
+    _markerAnimations[deviceId]?.dispose();
+    
+    // Create new animation state
+    final animation = _MarkerAnimation(
+      index: index,
+      startLat: startLat,
+      startLng: startLng,
+      endLat: endLat,
+      endLng: endLng,
+    );
+    
+    _markerAnimations[deviceId] = animation;
+    
+    // Update at approximately 30fps (33ms) for smooth animation
+    // but without excessive performance impact
+    animation.timer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
+      final elapsedTime = DateTime.now().difference(animation.startTime);
+      
+      if (elapsedTime >= _animationDuration) {
+        // Animation completed, set final position
+        _updateMarkerPosition(index, endLat, endLng);
+        
+        // Clean up
+        _markerAnimations[deviceId]?.dispose();
+        _markerAnimations.remove(deviceId);
+        timer.cancel();
+        return;
+      }
+      
+      // Calculate progress with easing (ease-out cubic)
+      final progress = elapsedTime.inMilliseconds / _animationDuration.inMilliseconds;
+      final easedProgress = _easeOutCubic(progress);
+      
+      // Interpolate position
+      final currentLat = animation.startLat + (animation.endLat - animation.startLat) * easedProgress;
+      final currentLng = animation.startLng + (animation.endLng - animation.startLng) * easedProgress;
+      
+      // Update marker position
+      _updateMarkerPosition(index, currentLat, currentLng);
+    });
+  }
+  
+  // Cubic ease out function: decelerating to zero velocity
+  static double _easeOutCubic(double t) {
+    return 1.0 - (1.0 - t) * (1.0 - t) * (1.0 - t);
+  }
+  
+  // Update marker position without animation
+  static void _updateMarkerPosition(int index, double lat, double lng) async {
+    try {
+      final newPosition = mp.Point(coordinates: mp.Position(lng, lat));
+      
+      _customImageAnnotations[index]!.geometry = newPosition;
+      await _customPointAnnotationManagers[index]!.update(_customImageAnnotations[index]!);
+      
+      _customPulseCircles[index]!.geometry = newPosition;
+      await _customPulseCircleManagers[index]!.update(_customPulseCircles[index]!);
+    } catch (e) {
+      debugPrint('Error updating marker position: $e');
     }
   }
 
@@ -244,6 +354,17 @@ class CustomLocationService {
   }
 
   static void dispose() {
+    // Cancel all active animations
+    for (final animation in _markerAnimations.values) {
+      animation.dispose();
+    }
+    _markerAnimations.clear();
+    
+    // Clear notification statuses for all tracked devices
+    for (final deviceId in _deviceIdToIndexMap.keys) {
+      NotificationService.clearDeviceStatus(deviceId);
+    }
+    
     _realtimeSubscription?.unsubscribe();
     _realtimeSubscription = null;
     _customPointAnnotationManagers.clear();
