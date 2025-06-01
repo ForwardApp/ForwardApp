@@ -120,6 +120,27 @@ async function createInitialTable() {
         -- Add a unique constraint to prevent duplicate connections
         ALTER TABLE connected_devices ADD CONSTRAINT unique_device_connection 
           UNIQUE (device_location_id, generated_id);
+          
+        -- Notification system table for tracking device notifications related to bounding boxes
+        CREATE TABLE IF NOT EXISTS notifications (
+          id SERIAL PRIMARY KEY,
+          device_location_id INTEGER REFERENCES device_locations(id) ON DELETE CASCADE,
+          safe_zone_id INTEGER REFERENCES safe_zone(id) ON DELETE CASCADE,
+          connected_device_id INTEGER REFERENCES connected_devices(id) ON DELETE CASCADE,
+          location_name TEXT,
+          status TEXT NOT NULL,
+          details TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_notifications_device_location_id ON notifications(device_location_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_safe_zone_id ON notifications(safe_zone_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_connected_device_id ON notifications(connected_device_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+
+        ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Enable all operations for notifications" ON notifications
+          FOR ALL USING (true);
       `
         });
 
@@ -134,6 +155,7 @@ async function createInitialTable() {
         console.log('- safe_zone table for storing safe home locations');
         console.log('- bounding_box table for storing rectangular areas');
         console.log('- device_locations table for tracking multiple devices');
+        console.log('- notifications table for tracking device notifications');
 
     } catch (error) {
         console.error('Migration failed:', error.message);
