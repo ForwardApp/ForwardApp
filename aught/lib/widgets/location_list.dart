@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/mapbox_search_service.dart';
+import '../screens/map_screen.dart';
 
 class LocationList extends StatefulWidget {
   final Function(Map<String, dynamic>)? onLocationSelected;
@@ -217,53 +218,86 @@ class _LocationListState extends State<LocationList> {
   Widget _buildLocationItem(BuildContext context, Map<String, dynamic> location) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
-            children: [
-              // Red location icon - left aligned
-              const Icon(Icons.location_on, color: Colors.red, size: 24),
+        GestureDetector(
+          onTap: () {
+            debugPrint('Location item tapped: ${location['first_location_name']} to ${location['second_location_name']}');
+            
+            // Get coordinate data
+            final firstLat = location['first_location_lat'];
+            final firstLng = location['first_location_lng'];
+            final secondLat = location['second_location_lat'];
+            final secondLng = location['second_location_lng'];
+            
+            // Debug prints to verify coordinates
+            debugPrint('Source coordinates: ($firstLat, $firstLng)');
+            debugPrint('Destination coordinates: ($secondLat, $secondLng)');
+            
+            // Check if we have valid coordinates
+            if (firstLat != null && firstLng != null && secondLat != null && secondLng != null) {
+              // Directly navigate to map and show route instead of just returning data
+              MapScreen.navigateToRoute(
+                firstLat,
+                firstLng,
+                secondLat,
+                secondLng,
+                sourceName: location['first_location_name'] ?? 'Start',
+                destName: location['second_location_name'] ?? 'End'
+              );
+              
+              // Close this screen after triggering navigation
+              Navigator.pop(context);
+            } else {
+              debugPrint('Invalid coordinates for navigation in location: ${location['id']}');
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                // Red location icon - left aligned
+                const Icon(Icons.location_on, color: Colors.red, size: 24),
 
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
 
-              // Location names column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      location['first_location_name'] ?? 'Unknown location',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                // Location names column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        location['first_location_name'] ?? 'Unknown location',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      location['second_location_name'] ?? 'Unknown location',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black,
+                      const SizedBox(height: 4),
+                      Text(
+                        location['second_location_name'] ?? 'Unknown location',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              // Read more button - right aligned
-              IconButton(
-                onPressed: () {
-                  _showMoreInfoModal(context, location);
-                },
-                icon: const Icon(
-                  Icons.menu_book,
-                  color: Colors.black54,
-                  size: 20,
+                // Read more button - right aligned
+                IconButton(
+                  onPressed: () {
+                    _showMoreInfoModal(context, location);
+                  },
+                  icon: const Icon(
+                    Icons.menu_book,
+                    color: Colors.black54,
+                    size: 20,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
 

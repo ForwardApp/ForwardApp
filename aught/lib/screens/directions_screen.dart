@@ -448,46 +448,53 @@ class _DirectionsScreenState extends State<DirectionsScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
-                                final location1 = _location1Controller.text;
-                                final location2 = _location2Controller.text;
-                                
-                                // Format times as strings
-                                final startTime = _formatTime24Hour(_selectedTime);
-                                final endTime = _formatTime24Hour(_selectedTime2);
-
-                                // Get transport mode
-                                final transportModes = ['walk', 'car', 'bike'];
-                                final selectedMode = transportModes[_selectedTransportIndex];
-
-                                try {
-                                  await SupabaseService.saveRouteLocations(
-                                    location1Name: location1,
-                                    location2Name: location2,
-                                    location1Address: _location1Address,
-                                    location2Address: _location2Address,
-                                    location1Lat: _location1Lat,
-                                    location1Lng: _location1Lng,
-                                    location2Lat: _location2Lat,
-                                    location2Lng: _location2Lng,
-                                    transportMode: selectedMode,
-                                    startTime: startTime,
-                                    endTime: endTime,
-                                  );
+                                if (_location1Lat != null && _location1Lng != null && 
+                                    _location2Lat != null && _location2Lng != null) {
                                   
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Route saved successfully!'),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Error saving route: ${e.toString()}'),
-                                      backgroundColor: Colors.red,
-                                      duration: Duration(seconds: 3),
-                                    ),
-                                  );
+                                  // First save to database
+                                  try {
+                                    await SupabaseService.saveRouteLocations(
+                                      location1Name: _location1Controller.text,
+                                      location2Name: _location2Controller.text,
+                                      location1Address: _location1Address,
+                                      location2Address: _location2Address,
+                                      location1Lat: _location1Lat,
+                                      location1Lng: _location1Lng,
+                                      location2Lat: _location2Lat,
+                                      location2Lng: _location2Lng,
+                                      startTime: _formatTime24Hour(_selectedTime),
+                                      endTime: _formatTime24Hour(_selectedTime2),
+                                      transportMode: ['walk', 'car', 'bike'][_selectedTransportIndex],
+                                    );
+                                    
+                                    // Show success message
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Route saved successfully!'),
+                                        backgroundColor: Colors.green,
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                    
+                                    // Navigate to map screen and pass route coordinates
+                                    Navigator.pop(context, {
+                                      'source_lat': _location1Lat,
+                                      'source_lng': _location1Lng,
+                                      'dest_lat': _location2Lat,
+                                      'dest_lng': _location2Lng,
+                                      'source_name': _location1Controller.text,
+                                      'dest_name': _location2Controller.text,
+                                    });
+                                    
+                                  } catch (e) {
+                                    debugPrint('Error saving route: $e');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error saving route: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(

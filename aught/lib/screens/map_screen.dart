@@ -16,18 +16,42 @@ import '../services/custom_location_service.dart';
 import '../widgets/bounding_box.dart';
 import '../widgets/safe_zone_toolbar.dart';
 import '../services/supabase_service.dart';
+import '../services/path_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   static _MapScreenState? _instance;
   
-  static void flyToLocation(double latitude, double longitude, String locationName, {int? safeZoneId}) {
+static void flyToLocation(double latitude, double longitude, String locationName, {int? safeZoneId}) {
     if (_instance != null && _instance!.mapboxMapController != null) {
       _instance!.flyToSafeZone(latitude, longitude, locationName, safeZoneId: safeZoneId);
     }
   }
 
+  // Make sure this static method is in the MapScreen class
+  static void navigateToRoute(
+    double sourceLat, 
+    double sourceLng, 
+    double destLat, 
+    double destLng, 
+    {String? sourceName, String? destName}
+  ) {
+    debugPrint('MapScreen.navigateToRoute called with: ($sourceLat, $sourceLng) to ($destLat, $destLng)');
+    if (_instance != null && _instance!.mapboxMapController != null) {
+      _instance!.enterNavigationMode(
+        sourceLat, 
+        sourceLng, 
+        destLat, 
+        destLng,
+        sourceName: sourceName,
+        destName: destName
+      );
+    } else {
+      debugPrint('Error: MapScreen instance or mapboxMapController is null');
+    }
+  }
+  
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -44,6 +68,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   // Fields to store current safe zone data
   int? _currentSafeZoneId;
   String? _currentSafeZoneName;
+  
+  // Navigation mode fields
+  bool _isInNavigationMode = false;
+  String? _navigationSourceName;
+  String? _navigationDestName;
   
   late AnimationController _sidebarAnimationController;
   late Animation<Offset> _sidebarSlideAnimation;
@@ -160,11 +189,114 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             onMapCreated: _onMapCreated,
           ),
 
+          // Show exit navigation button only when in navigation mode
+          if (_isInNavigationMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    )
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.black54),
+                  onPressed: _exitNavigationMode,
+                  tooltip: 'Exit navigation',
+                ),
+              ),
+            ),
+
+          // Show navigation info when in navigation mode
+          if (_isInNavigationMode && _navigationSourceName != null && _navigationDestName != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    )
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 7,
+                          child: TextField(
+                            enabled: false,
+                            controller: TextEditingController(text: _navigationSourceName ?? ''),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          flex: 1,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.black54),
+                            onPressed: _exitNavigationMode,
+                            tooltip: 'Exit navigation',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 7,
+                          child: TextField(
+                            enabled: false,
+                            controller: TextEditingController(text: _navigationDestName ?? ''),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          flex: 1,
+                          child: IconButton(
+                            icon: const Icon(Icons.swap_vert, color: Colors.black54),
+                            onPressed: () {},
+                            tooltip: 'Swap locations',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // Add BoundingBoxWidget first (lower z-index)
           if (_isInSafeZoneMode && mapboxMapController != null)
             BoundingBoxWidget(
               mapController: mapboxMapController,
-              isPanEnabled: !_isPanDisabled, // Pass false when pan is disabled
+              isPanEnabled: !_isPanDisabled,
             ),
             
           // Then add UI elements that need to be interactive (higher z-index)
@@ -176,47 +308,50 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   LocationButton(mapboxMapController: mapboxMapController),
-                  const SizedBox(height: 10),
-                  DirectionsButton(),
-                  const SizedBox(height: 10),
-                  SafeHomeButton(),
+                  if (!_isInNavigationMode) ...[
+                    const SizedBox(height: 10),
+                    DirectionsButton(),
+                    const SizedBox(height: 10),
+                    SafeHomeButton(),
+                  ],
                 ],
               ),
             ),
 
-            Positioned(
-              top: 50,
-              left: 20,
-              child: GestureDetector(
-                onTap: _toggleSidebar,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+            if (!_isInNavigationMode)
+              Positioned(
+                top: 50,
+                left: 20,
+                child: GestureDetector(
+                  onTap: _toggleSidebar,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Image.asset(
+                        'lib/assets/sidebarthick.jpg',
+                        width: 24,
+                        height: 24,
+                        fit: BoxFit.contain,
+                        color: Colors.grey[600],
+                        colorBlendMode: BlendMode.srcIn,
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Image.asset(
-                      'lib/assets/sidebarthick.jpg',
-                      width: 24,
-                      height: 24,
-                      fit: BoxFit.contain,
-                      color: Colors.grey[600],
-                      colorBlendMode: BlendMode.srcIn,
                     ),
                   ),
                 ),
               ),
-            ),
           ] else ...[
             Positioned(
               right: 10,
@@ -230,12 +365,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 },
                 onMapToggled: _handleMapToggle,
                 onClosePressed: _exitSafeZoneMode,
-                onSavePressed: _saveAndExitSafeZoneInPlace, // Use the new method for check button
+                onSavePressed: _saveAndExitSafeZoneInPlace,
               ),
             ),
           ],
 
-          if (_isSidebarOpen && !_isInSafeZoneMode)
+          if (_isSidebarOpen && !_isInSafeZoneMode && !_isInNavigationMode)
             Positioned.fill(
               child: GestureDetector(
                 onTap: _closeSidebar,
@@ -245,7 +380,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
 
-          if (_isSidebarOpen && !_isInSafeZoneMode)
+          if (_isSidebarOpen && !_isInSafeZoneMode && !_isInNavigationMode)
             SlideTransition(
               position: _sidebarSlideAnimation,
               child: Sidebar(onClose: _closeSidebar),
@@ -335,11 +470,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     // Add image annotation at current location
     await _addImageAnnotation();
     
-    // Add custom image annotation at Japan location
+
     await CustomLocationService.addCustomImageAnnotations(mapboxMapController, _pulseAnimationController);
     
     // Load and display saved bounding boxes from database
     await _loadAndDisplayBoundingBoxes();
+    
+    // Display the path between the predefined points in Finland
+    await PathService.displayPath(mapboxMapController);
   }
 
   // Add method to load and display bounding boxes from database
@@ -1080,6 +1218,55 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         pitch: 60.0, // Change to 60 degree pitch
       ),
       mp.MapAnimationOptions(duration: 1500), 
+    );
+  }
+
+  // Method to enter navigation mode with coordinates
+  void enterNavigationMode(
+    double sourceLat,
+    double sourceLng,
+    double destLat,
+    double destLng,
+    {String? sourceName, String? destName}
+  ) async {
+    if (mapboxMapController == null) return;
+    setState(() {
+      _isInNavigationMode = true;
+      _navigationSourceName = sourceName;
+      _navigationDestName = destName;
+    });
+    _updateCompassPosition();
+    PathService.setRouteCoordinates(
+      sourceLat: sourceLat,
+      sourceLng: sourceLng,
+      destLat: destLat,
+      destLng: destLng,
+      sourceName: sourceName,
+      destName: destName
+    );
+    await Future.delayed(const Duration(milliseconds: 100));
+    await PathService.displayPath(mapboxMapController);
+  }
+
+  void _exitNavigationMode() {
+    setState(() {
+      _isInNavigationMode = false;
+      _navigationSourceName = null;
+      _navigationDestName = null;
+    });
+    _updateCompassPosition();
+    _animateToUserLocation();
+    PathService.clearPath(mapboxMapController);
+  }
+
+  void _updateCompassPosition() {
+    mapboxMapController?.compass.updateSettings(
+      mp.CompassSettings(
+        position: mp.OrnamentPosition.TOP_RIGHT,
+        marginRight: 16,
+        marginTop: _isInNavigationMode ? 190 : 50,
+        enabled: true,
+      ),
     );
   }
 }
