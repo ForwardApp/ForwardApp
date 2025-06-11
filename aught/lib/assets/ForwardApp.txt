@@ -118,5 +118,7 @@ my phone uses its built-in GPS to obtain its own location and sends that directl
 flutter devices
 flutter run -d all
 
+
+flutter run -d 9014f550
 flutter run -d emulator-5554
 flutter run -d ABC123

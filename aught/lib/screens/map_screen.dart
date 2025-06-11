@@ -836,9 +836,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       return false;
     }
 
-    // Permission granted - animate to user's location
-    if (permission == gl.LocationPermission.whileInUse ||
-        permission == gl.LocationPermission.always) {
+    // Permission granted but don't animate to location yet
+    if (permission == gl.LocationPermission.whileInUse) {
+      // First show background permission dialog 
+      await _showBackgroundLocationDialog();
+      // Now animate to location after user has responded to dialog
+      _animateToUserLocation();
+    } else if (permission == gl.LocationPermission.always) {
+      // Already has background permission, animate directly
       _animateToUserLocation();
     }
 
@@ -950,6 +955,80 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: const Text('Open Settings'),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showBackgroundLocationDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap a button
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Allow background location',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'For better experience, please allow the location to be used all the time in the settings.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: Colors.grey),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          // On Android, we need to take users to settings for background permission
+                          await gl.Geolocator.openAppSettings();
+                        },
+                        child: const Text('Go to settings'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

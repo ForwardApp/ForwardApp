@@ -5,6 +5,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'services/supabase_service.dart';
 import 'services/tracking_service.dart';
 import 'services/device_location.dart';
+import 'services/background_location_service.dart';
 
 void main() async {
   // This needs to be called before any platform channels are accessed
@@ -26,6 +27,10 @@ void main() async {
     debugPrint('Initializing device info...');
     await DeviceLocation.initializeDeviceInfo();
     debugPrint('Device info initialized');
+    
+    // Initialize background location service
+    await BackgroundLocationService.initializeService();
+    debugPrint('Background location service initialized');
     
     // Try to initialize Supabase but don't block app launch if it fails
     try {

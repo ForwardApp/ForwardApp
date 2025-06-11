@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'device_location.dart';
 import 'supabase_service.dart';
+import 'background_location_service.dart';
 
 class TrackingService {
   static final TrackingService _instance = TrackingService._internal();
@@ -103,12 +104,16 @@ class TrackingService {
           
           // Start location tracking service
           DeviceLocation.startTracking(deviceCode.replaceAll('-', ''));
+          // Start background service
+          BackgroundLocationService.startBackgroundTracking();
         } catch (e) {
           debugPrint('Error connecting device to database: $e');
         }
       } else {
         // Stop tracking
         DeviceLocation.stopTracking();
+        // Stop background service
+        BackgroundLocationService.stopBackgroundTracking();
         
         // Update device status in database to indicate tracking is stopped
         try {

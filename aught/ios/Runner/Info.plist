@@ -4,6 +4,10 @@
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Location required to display on map.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is used to provide real-time tracking and alerts when away from safe zones.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Background location allows us to get your child's location for when safe zones have been entered or exited</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
