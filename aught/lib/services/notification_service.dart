@@ -14,6 +14,11 @@ class NotificationService {
   static const int _minimumChangeInterval = 30;
   static const double _toleranceMeters = 10.0;
 
+  // Background notification tracking
+  static bool _isInBackground = false;
+  static DateTime? _lastBackgroundNotificationTime;
+  static const int _backgroundNotificationCooldown = 60; // 1 minute cooldown
+
   static Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -26,6 +31,7 @@ class NotificationService {
     await _notificationsPlugin.initialize(initializationSettings);
     
     await _createNotificationChannel();
+    await _createBackgroundNotificationChannel();
     await _requestNotificationPermission();
   }
 
@@ -48,6 +54,25 @@ class NotificationService {
     }
   }
 
+  static Future<void> _createBackgroundNotificationChannel() async {
+    const AndroidNotificationChannel backgroundChannel = AndroidNotificationChannel(
+      'background_alerts',
+      'Background Alerts',
+      description: 'Notifications for background app state',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    final androidImplementation = _notificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    
+    if (androidImplementation != null) {
+      await androidImplementation.createNotificationChannel(backgroundChannel);
+      debugPrint('Background notification channel created');
+    }
+  }
+
   static Future<void> _requestNotificationPermission() async {
     final androidImplementation = _notificationsPlugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
@@ -56,6 +81,84 @@ class NotificationService {
       final bool? granted = await androidImplementation.requestNotificationsPermission();
       debugPrint('Notification permission granted: $granted');
     }
+  }
+
+  // Method to handle app lifecycle changes
+  static Future<void> handleAppLifecycleChange(AppLifecycleState state) async {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        if (!_isInBackground) {
+          _isInBackground = true;
+          await _showBackgroundNotification();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        _isInBackground = false;
+        break;
+      case AppLifecycleState.inactive:
+        break;
+      case AppLifecycleState.hidden:
+        if (!_isInBackground) {
+          _isInBackground = true;
+          await _showBackgroundNotification();
+        }
+        break;
+    }
+  }
+
+  static Future<void> _showBackgroundNotification() async {
+    final now = DateTime.now();
+    
+    // Check cooldown to prevent spam notifications
+    if (_lastBackgroundNotificationTime != null) {
+      final timeSinceLastNotification = now.difference(_lastBackgroundNotificationTime!).inSeconds;
+      if (timeSinceLastNotification < _backgroundNotificationCooldown) {
+        debugPrint('Background notification skipped - cooldown active');
+        return;
+      }
+    }
+    
+    _lastBackgroundNotificationTime = now;
+
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'background_alerts',
+      'Background Alerts',
+      channelDescription: 'Notifications for background app state',
+      importance: Importance.high,
+      priority: Priority.high,
+      enableVibration: true,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
+      color: Color(0xFF2196F3),
+      ongoing: true, 
+      autoCancel: false, 
+    );
+
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    final List<String> backgroundMessages = [
+      'We are tracking in the background',
+      'Location services running in background',
+      'Background monitoring active',
+      'Keeping you safe in the background',
+      'Background location tracking enabled',
+      'We are working behind the scenes',
+      'Background services are active',
+    ];
+
+    final randomMessage = backgroundMessages[math.Random().nextInt(backgroundMessages.length)];
+
+    await _notificationsPlugin.show(
+      999,
+      'App Running in Background',
+      randomMessage,
+      platformChannelSpecifics,
+    );
+
+    debugPrint('Background notification sent: $randomMessage');
   }
 
   // Main method to check device location against all bounding boxes

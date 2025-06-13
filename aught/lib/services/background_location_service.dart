@@ -12,7 +12,7 @@ class BackgroundLocationService {
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
-        autoStart: false,
+        autoStart: true,
         isForegroundMode: true,
         foregroundServiceNotificationId: 888,
       ),
@@ -42,12 +42,7 @@ class BackgroundLocationService {
         distanceFilter: 10, // Update every 10 meters
       ),
     ).listen((Position position) async {
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: "Location Tracking",
-          content: "Lat: ${position.latitude}, Long: ${position.longitude}",
-        );
-      }
+    
       
       try {
         // Update location in database like in device_location.dart
