@@ -95,6 +95,10 @@ class NotificationService {
         break;
       case AppLifecycleState.resumed:
         _isInBackground = false;
+        // Cancel the background notification when app returns to foreground
+        await _notificationsPlugin.cancel(999);
+        // Reset the last notification time so we'll show a notification immediately next time
+        _lastBackgroundNotificationTime = null;
         break;
       case AppLifecycleState.inactive:
         break;
