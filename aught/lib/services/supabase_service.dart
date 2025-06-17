@@ -255,4 +255,173 @@ class SupabaseService {
       return false;
     }
   }
+
+  // Save task to database
+  static Future<void> saveTask({
+    required String taskDescription,
+    required DateTime taskDate,
+    required String repeatOption,
+  }) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      await client.from('task_list').insert({
+        'task_description': taskDescription,
+        'task_date': taskDate.toIso8601String().split('T')[0], // Store only date part
+        'repeat_option': repeatOption,
+        'checked': false, // Default to unchecked
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      debugPrint('Task saved successfully: $taskDescription');
+    } catch (e) {
+      debugPrint('Error saving task: $e');
+      throw Exception('Failed to save task: $e');
+    }
+  }
+
+  // Add these methods to handle recurring tasks
+  static Future<List<Map<String, dynamic>>> getTasksForDate(DateTime date) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      final dateString = date.toIso8601String().split('T')[0];
+      final today = DateTime.now();
+      final todayString = today.toIso8601String().split('T')[0];
+
+      // Get direct tasks for this date
+      final directTasks = await client
+          .from('task_list')
+          .select()
+          .eq('task_date', dateString)
+          .order('created_at', ascending: false);
+
+      List<Map<String, dynamic>> allTasks = List<Map<String, dynamic>>.from(directTasks);
+
+      // Get daily recurring tasks created before or on the requested date
+      final dailyTasks = await client
+          .from('task_list')
+          .select()
+          .eq('repeat_option', 'Daily')
+          .lte('task_date', dateString)
+          .order('created_at', ascending: false);
+
+      for (final task in dailyTasks) {
+        final taskDate = DateTime.parse(task['task_date']);
+        // Only include if the requested date is on or after the task's original date
+        if (!date.isBefore(taskDate)) {
+          // Create a copy of the task with the requested date
+          final recurringTask = Map<String, dynamic>.from(task);
+          recurringTask['task_date'] = dateString;
+          recurringTask['is_recurring'] = true;
+          recurringTask['original_date'] = task['task_date'];
+          allTasks.add(recurringTask);
+        }
+      }
+
+      // Get weekly recurring tasks
+      final weeklyTasks = await client
+          .from('task_list')
+          .select()
+          .eq('repeat_option', 'Weekly')
+          .lte('task_date', dateString)
+          .order('created_at', ascending: false);
+
+      for (final task in weeklyTasks) {
+        final taskDate = DateTime.parse(task['task_date']);
+        // Check if the requested date falls on the same weekday as the original task
+        if (!date.isBefore(taskDate) && date.weekday == taskDate.weekday) {
+          // Create a copy of the task with the requested date
+          final recurringTask = Map<String, dynamic>.from(task);
+          recurringTask['task_date'] = dateString;
+          recurringTask['is_recurring'] = true;
+          recurringTask['original_date'] = task['task_date'];
+          allTasks.add(recurringTask);
+        }
+      }
+
+      // Remove duplicates based on task description and date
+      final uniqueTasks = <String, Map<String, dynamic>>{};
+      for (final task in allTasks) {
+        final key = '${task['task_description']}_${task['task_date']}_${task['repeat_option']}';
+        if (!uniqueTasks.containsKey(key) || 
+            (uniqueTasks[key]!['is_recurring'] == true && task['is_recurring'] != true)) {
+          uniqueTasks[key] = task;
+        }
+      }
+
+      final result = uniqueTasks.values.toList();
+      debugPrint('Loaded ${result.length} tasks for date: $dateString (${directTasks.length} direct, ${result.length - directTasks.length} recurring)');
+      
+      return result;
+    } catch (e) {
+      debugPrint('Error getting tasks for date: $e');
+      return [];
+    }
+  }
+
+  static Future<void> updateTaskStatus(int taskId, bool isChecked, {bool isRecurring = false, String? taskDate}) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      if (isRecurring && taskDate != null) {
+        // For recurring tasks, we need to create a separate record for the specific date
+        // to track its completion status independently
+        final originalTask = await client
+            .from('task_list')
+            .select()
+            .eq('id', taskId)
+            .single();
+
+        // Check if we already have a completion record for this date
+        final existingRecord = await client
+            .from('task_completions')
+            .select()
+            .eq('original_task_id', taskId)
+            .eq('completion_date', taskDate)
+            .maybeSingle();
+
+        if (existingRecord != null) {
+          // Update existing completion record
+          await client
+              .from('task_completions')
+              .update({
+                'completed': isChecked,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', existingRecord['id']);
+        } else {
+          // Create new completion record
+          await client.from('task_completions').insert({
+            'original_task_id': taskId,
+            'completion_date': taskDate,
+            'completed': isChecked,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        }
+      } else {
+        // For non-recurring tasks, update directly
+        await client
+            .from('task_list')
+            .update({
+              'checked': isChecked,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', taskId);
+      }
+
+      debugPrint('Task status updated: $taskId -> $isChecked (recurring: $isRecurring)');
+    } catch (e) {
+      debugPrint('Error updating task status: $e');
+      throw Exception('Failed to update task status: $e');
+    }
+  }
 }

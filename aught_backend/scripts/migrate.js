@@ -141,6 +141,43 @@ async function createInitialTable() {
         ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
         CREATE POLICY "Enable all operations for notifications" ON notifications
           FOR ALL USING (true);
+          
+        -- Task list table for storing user tasks
+        CREATE TABLE IF NOT EXISTS task_list (
+          id SERIAL PRIMARY KEY,
+          task_description TEXT NOT NULL,
+          task_date DATE NOT NULL,
+          repeat_option TEXT NOT NULL DEFAULT 'None',
+          checked BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_list_task_date ON task_list(task_date);
+        CREATE INDEX IF NOT EXISTS idx_task_list_created_at ON task_list(created_at);
+
+        ALTER TABLE task_list ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Enable all operations for task list" ON task_list
+          FOR ALL USING (true);
+
+        -- Task completions table for tracking recurring task completion status
+        CREATE TABLE IF NOT EXISTS task_completions (
+          id SERIAL PRIMARY KEY,
+          original_task_id INTEGER REFERENCES task_list(id) ON DELETE CASCADE,
+          completion_date DATE NOT NULL,
+          completed BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+          UNIQUE(original_task_id, completion_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_completions_original_task_id ON task_completions(original_task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_completions_completion_date ON task_completions(completion_date);
+        CREATE INDEX IF NOT EXISTS idx_task_completions_unique ON task_completions(original_task_id, completion_date);
+
+        ALTER TABLE task_completions ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Enable all operations for task completions" ON task_completions
+          FOR ALL USING (true);
       `
         });
 
@@ -156,6 +193,8 @@ async function createInitialTable() {
         console.log('- bounding_box table for storing rectangular areas');
         console.log('- device_locations table for tracking multiple devices');
         console.log('- notifications table for tracking device notifications');
+        console.log('- task_list table for storing user tasks');
+        console.log('- task_completions table for tracking recurring task completion status');
 
     } catch (error) {
         console.error('Migration failed:', error.message);

@@ -1,4 +1,5 @@
 import '../screens/map_screen.dart';
+import '../screens/Home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -74,7 +75,12 @@ class MyApp extends StatelessWidget {
           selectionHandleColor: Colors.black,
         ),
       ),
-      home: AppLifecycleObserver(child: MapScreen()),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => AppLifecycleObserver(child: const MapScreen()),
+        '/map': (context) => AppLifecycleObserver(child: const MapScreen()),
+        '/home': (context) => const HomeScreen(),
+      },
     );
   }
 }

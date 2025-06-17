@@ -17,6 +17,7 @@ import '../widgets/bounding_box.dart';
 import '../widgets/safe_zone_toolbar.dart';
 import '../services/supabase_service.dart';
 import '../services/path_service.dart';
+import '../widgets/bottom_navigation_bar.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -387,6 +388,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 0),
     );
   }
 
