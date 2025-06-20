@@ -406,13 +406,13 @@ class _MyHomePageState extends State<MyHomePage> {
               
               // Display scan results
               ..._scanResults
-                .where((result) => result.device.name == "WioTerminal")
+                .where((result) => result.device.name.isNotEmpty || result.device.id.id.isNotEmpty)
                 .map(
                   (result) => Card(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     child: ListTile(
                       leading: const Icon(Icons.bluetooth),
-                      title: Text(result.device.name),
+                      title: Text(result.device.name.isEmpty ? "Unknown Device" : result.device.name),
                       subtitle: Text(result.device.id.id),
                       trailing: Column(
                         mainAxisSize: MainAxisSize.min,
