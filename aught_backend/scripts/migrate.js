@@ -149,6 +149,7 @@ async function createInitialTable() {
           task_date DATE NOT NULL,
           repeat_option TEXT NOT NULL DEFAULT 'None',
           checked BOOLEAN DEFAULT false,
+          image_url TEXT,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
         );
@@ -178,6 +179,33 @@ async function createInitialTable() {
         ALTER TABLE task_completions ENABLE ROW LEVEL SECURITY;
         CREATE POLICY "Enable all operations for task completions" ON task_completions
           FOR ALL USING (true);
+        
+        -- Add image_url column to existing task_list table if it doesn't exist
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='task_list' AND column_name='image_url') THEN
+                ALTER TABLE task_list ADD COLUMN image_url TEXT;
+            END IF;
+        END $$;
+        
+        -- Create storage bucket for task images if it doesn't exist
+        INSERT INTO storage.buckets (id, name, public) 
+        VALUES ('task-images', 'task-images', true)
+        ON CONFLICT (id) DO NOTHING;
+
+        -- Set up RLS policy for the bucket if it doesn't exist
+        DO $$ 
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies 
+                WHERE schemaname = 'storage' 
+                AND tablename = 'objects' 
+                AND policyname = 'Public Access'
+            ) THEN
+                CREATE POLICY "Public Access" ON storage.objects FOR ALL USING (bucket_id = 'task-images');
+            END IF;
+        END $$;
       `
         });
 
@@ -195,6 +223,7 @@ async function createInitialTable() {
         console.log('- notifications table for tracking device notifications');
         console.log('- task_list table for storing user tasks');
         console.log('- task_completions table for tracking recurring task completion status');
+        console.log('- storage bucket "task-images" for storing task images');
 
     } catch (error) {
         console.error('Migration failed:', error.message);

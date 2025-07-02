@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/device_location.dart';
 import '../services/supabase_service.dart';
 import '../services/tracking_service.dart';
+import '../screens/map_screen.dart';
+import '../services/custom_location_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Settingpage extends StatefulWidget {
   final VoidCallback onClose;
@@ -22,6 +25,8 @@ class _SettingpageState extends State<Settingpage> {
   // Replace the mockup tracked devices with a Future to fetch real data
   Future<List<Map<String, dynamic>>>? _connectedDevicesFuture;
 
+  RealtimeChannel? _deviceCodesSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +36,7 @@ class _SettingpageState extends State<Settingpage> {
     _loadTrackingStatus();
     // Load connected devices from database
     _loadConnectedDevices();
+    _setupDeviceCodesSubscription();
   }
   
   // Load device code from persistent storage
@@ -354,6 +360,16 @@ class _SettingpageState extends State<Settingpage> {
                                       duration: Duration(seconds: 2),
                                     ),
                                   );
+                                  
+                                  // Refresh the connected devices list in settings
+                                  _loadConnectedDevices();
+                                  
+                                  // Refresh the map to show the newly connected device
+                                  try {
+                                    MapScreen.refreshCustomImageAnnotations();
+                                  } catch (e) {
+                                    debugPrint('Error refreshing map after device connection: $e');
+                                  }
                                 }
                               } catch (e) {
                                 debugPrint('Error connecting to device: $e');
@@ -620,6 +636,110 @@ class _SettingpageState extends State<Settingpage> {
         );
       }
     }
+  }
+
+  // Add this method to watch for code changes in tracked devices
+  void _setupDeviceCodesSubscription() async {
+    try {
+      // Get my device ID to know which connections to monitor
+      final deviceCode = await DeviceLocation.getFormattedDeviceId();
+      
+      // Get my device info using the generated code
+      final myDeviceInfo = await SupabaseService.client
+        .from('device_locations')
+        .select('id')
+        .eq('generated_id', deviceCode.replaceAll('-', ''))
+        .single();
+      
+      final myDeviceId = myDeviceInfo['id'];
+      
+      // Get all connected devices and their current generated IDs
+      final connectedDevices = await SupabaseService.client
+        .from('connected_devices')
+        .select('id, connected_device_id, generated_id')
+        .eq('device_location_id', myDeviceId);
+      
+      // Create a map to track the current generated IDs
+      Map<int, String> trackedDeviceIds = {};
+      for (final device in connectedDevices) {
+        trackedDeviceIds[device['connected_device_id']] = device['generated_id'];
+      }
+      
+      debugPrint('Tracking generated IDs for ${trackedDeviceIds.length} devices');
+      
+      // Cancel any existing subscription
+      _deviceCodesSubscription?.unsubscribe();
+      
+      // Subscribe to device_locations changes
+      _deviceCodesSubscription = SupabaseService.client
+        .channel('device_codes_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'device_locations',
+          callback: (payload) async {
+            final updatedDeviceId = payload.newRecord['id'];
+            final newGeneratedId = payload.newRecord['generated_id'];
+            
+            // Check if this is a device we're tracking
+            if (trackedDeviceIds.containsKey(updatedDeviceId)) {
+              final oldGeneratedId = trackedDeviceIds[updatedDeviceId];
+              
+              // Only react if the generated_id has actually changed
+              if (oldGeneratedId != newGeneratedId) {
+                debugPrint('Tracked device changed its code: $oldGeneratedId → $newGeneratedId');
+                
+                final existingConnection = await SupabaseService.client
+                  .from('connected_devices')
+                  .select('id')
+                  .eq('device_location_id', myDeviceId)
+                  .eq('connected_device_id', updatedDeviceId)
+                  .maybeSingle();
+                
+                if (existingConnection != null) {
+                  // Delete the connection from database
+                  await SupabaseService.client
+                    .from('connected_devices')
+                    .delete()
+                    .eq('id', existingConnection['id']);
+                  
+                  // Update our local tracking map
+                  trackedDeviceIds.remove(updatedDeviceId);
+                  
+                  // Refresh the connected devices list
+                  if (mounted) {
+                    _loadConnectedDevices();
+                    
+                    // Remove the marker from the map
+                    MapScreen.removeCustomImageAnnotation(updatedDeviceId);
+                    
+                    // Show notification to user
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('A tracked device has changed its code and is no longer visible'),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }
+              } else {
+                debugPrint('Tracked device updated but code did not change');
+              }
+            }
+          },
+        )
+        .subscribe();
+        
+      debugPrint('Device codes subscription set up successfully');
+    } catch (e) {
+      debugPrint('Error setting up device codes subscription: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _deviceCodesSubscription?.unsubscribe();
+    super.dispose();
   }
 
   @override

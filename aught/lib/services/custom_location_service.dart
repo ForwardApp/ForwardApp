@@ -353,6 +353,42 @@ class CustomLocationService {
     }
   }
 
+  static Future<void> removeDeviceAnnotation(int deviceId) async {
+    final index = _deviceIdToIndexMap[deviceId];
+    
+    if (index != null && 
+        index < _customImageAnnotations.length &&
+        index < _customPulseCircles.length) {
+      
+      try {
+        // Remove point annotation
+        if (_customPointAnnotationManagers[index] != null &&
+            _customImageAnnotations[index] != null) {
+          await _customPointAnnotationManagers[index]!.delete(_customImageAnnotations[index]!);
+          _customImageAnnotations[index] = null;
+        }
+        
+        // Remove pulse circle
+        if (_customPulseCircleManagers[index] != null &&
+            _customPulseCircles[index] != null) {
+          await _customPulseCircleManagers[index]!.delete(_customPulseCircles[index]!);
+          _customPulseCircles[index] = null;
+        }
+        
+        // Cancel any active animation
+        _markerAnimations[deviceId]?.dispose();
+        _markerAnimations.remove(deviceId);
+        
+        // Remove from device ID mapping
+        _deviceIdToIndexMap.remove(deviceId);
+        
+        debugPrint('Removed annotations for device ID: $deviceId');
+      } catch (e) {
+        debugPrint('Error removing device annotation: $e');
+      }
+    }
+  }
+
   static void dispose() {
     // Cancel all active animations
     for (final animation in _markerAnimations.values) {

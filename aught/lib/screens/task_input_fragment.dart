@@ -565,22 +565,19 @@ class _TaskInputFragmentState extends State<TaskInputFragment> {
               ElevatedButton(
                 onPressed: () async {
                   try {
-                    // Save to database
                     await SupabaseService.saveTask(
                       taskDescription: _taskController.text,
                       taskDate: _selectedDate,
                       repeatOption: _selectedRepeatOption,
+                      imageFile: _selectedImage,
                     );
 
-                    // Return the task data to the calling screen
-                    Navigator.pop(context, {
-                      'task': _taskController.text,
-                      'date': _selectedDate,
-                      'repeat': _selectedRepeatOption,
-                      'image': _selectedImage,
-                    });
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/home',
+                      (route) => false,
+                    );
                   } catch (e) {
-                    // Show error message if saving fails
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Error saving task: ${e.toString()}'),

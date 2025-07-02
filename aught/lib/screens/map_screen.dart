@@ -53,6 +53,21 @@ static void flyToLocation(double latitude, double longitude, String locationName
     }
   }
   
+  static void refreshCustomImageAnnotations() {
+  if (_instance != null && _instance!.mapboxMapController != null) {
+    CustomLocationService.addCustomImageAnnotations(
+      _instance!.mapboxMapController,
+      _instance!._pulseAnimationController,
+    );
+  }
+}
+
+  static void removeCustomImageAnnotation(int deviceId) {
+  if (_instance != null && _instance!.mapboxMapController != null) {
+    CustomLocationService.removeDeviceAnnotation(deviceId);
+  }
+}
+
   @override
   State<MapScreen> createState() => _MapScreenState();
 }

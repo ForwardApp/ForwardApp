@@ -1,6 +1,8 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'dart:typed_data';
 
 class SupabaseService {
   static late final SupabaseClient _client;
@@ -256,30 +258,116 @@ class SupabaseService {
     }
   }
 
-  // Save task to database
+  // Save task to database with image support
   static Future<void> saveTask({
     required String taskDescription,
     required DateTime taskDate,
     required String repeatOption,
+    File? imageFile,
   }) async {
     try {
       if (!isInitialized) {
         await initialize();
       }
 
+      String? imageUrl;
+      
+      // Upload image if provided
+      if (imageFile != null) {
+        imageUrl = await uploadTaskImage(imageFile);
+      }
+
       await client.from('task_list').insert({
         'task_description': taskDescription,
-        'task_date': taskDate.toIso8601String().split('T')[0], // Store only date part
+        'task_date': taskDate.toIso8601String().split('T')[0],
         'repeat_option': repeatOption,
-        'checked': false, // Default to unchecked
+        'checked': false,
+        'image_url': imageUrl,
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       });
 
-      debugPrint('Task saved successfully: $taskDescription');
+      debugPrint('Task saved successfully with image: $taskDescription');
     } catch (e) {
       debugPrint('Error saving task: $e');
       throw Exception('Failed to save task: $e');
+    }
+  }
+
+  // Upload task image to Supabase Storage
+  static Future<String?> uploadTaskImage(File imageFile) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      // Generate unique filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = imageFile.path.split('.').last;
+      final fileName = 'task_$timestamp.$extension';
+
+      // Upload to Supabase Storage
+      final String filePath = await client.storage
+          .from('task-images')
+          .upload(fileName, imageFile);
+
+      // Get public URL
+      final String publicUrl = client.storage
+          .from('task-images')
+          .getPublicUrl(fileName);
+
+      debugPrint('Image uploaded successfully: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      return null;
+    }
+  }
+
+  // Download task image
+  static Future<Uint8List?> downloadTaskImage(String imageUrl) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      // Extract filename from URL
+      final uri = Uri.parse(imageUrl);
+      final fileName = uri.pathSegments.last;
+
+      // Download from Supabase Storage
+      final Uint8List imageData = await client.storage
+          .from('task-images')
+          .download(fileName);
+
+      return imageData;
+    } catch (e) {
+      debugPrint('Error downloading image: $e');
+      return null;
+    }
+  }
+
+  // Delete task image
+  static Future<bool> deleteTaskImage(String imageUrl) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      // Extract filename from URL
+      final uri = Uri.parse(imageUrl);
+      final fileName = uri.pathSegments.last;
+
+      // Delete from Supabase Storage
+      await client.storage
+          .from('task-images')
+          .remove([fileName]);
+
+      debugPrint('Image deleted successfully: $fileName');
+      return true;
+    } catch (e) {
+      debugPrint('Error deleting image: $e');
+      return false;
     }
   }
 
@@ -422,6 +510,44 @@ class SupabaseService {
     } catch (e) {
       debugPrint('Error updating task status: $e');
       throw Exception('Failed to update task status: $e');
+    }
+  }
+
+  // Delete task from database
+  static Future<void> deleteTask(int taskId) async {
+    try {
+      if (!isInitialized) {
+        await initialize();
+      }
+
+      // First get the task to check if it has an image
+      final task = await client
+          .from('task_list')
+          .select('image_url')
+          .eq('id', taskId)
+          .maybeSingle();
+
+      // Delete the image from storage if it exists
+      if (task != null && task['image_url'] != null) {
+        await deleteTaskImage(task['image_url']);
+      }
+
+      // Delete the task from database
+      await client
+          .from('task_list')
+          .delete()
+          .eq('id', taskId);
+
+      // Also delete any completion records for recurring tasks
+      await client
+          .from('task_completions')
+          .delete()
+          .eq('original_task_id', taskId);
+
+      debugPrint('Task deleted successfully: $taskId');
+    } catch (e) {
+      debugPrint('Error deleting task: $e');
+      throw Exception('Failed to delete task: $e');
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import '../widgets/bottom_navigation_bar.dart';
 import 'task_input_fragment.dart';
 import '../services/supabase_service.dart';
@@ -46,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final selectedDate = _dates[_selectedDayIndex];
       final tasksData = await SupabaseService.getTasksForDate(selectedDate);
       
-      // Get completion status for recurring tasks
       for (final task in tasksData) {
         if (task['is_recurring'] == true) {
           final dateString = selectedDate.toIso8601String().split('T')[0];
@@ -328,39 +328,171 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: Colors.black,
                                     borderRadius: BorderRadius.circular(15),
                                   ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.more_vert,
-                                      color: Colors.white,
-                                      size: 24,
+                                  child: GestureDetector(
+                                    onTap: () async {
+                                      try {
+                                        await SupabaseService.deleteTask(task['id']);
+                                        _loadTasksForSelectedDate();
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Error deleting task: ${e.toString()}'),
+                                            backgroundColor: Colors.red,
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        debugPrint('Error deleting task: $e');
+                                      }
+                                    },
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.delete_rounded,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
                                     ),
                                   ),
                                 ),
                                 Expanded(
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                    child: Row(
                                       children: [
-                                        Text(
-                                          task['task_description'] ?? 'No description',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            color: Colors.black87,
-                                            fontWeight: FontWeight.bold,
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                task['task_description'] ?? 'No description',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.black87,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                task['repeat_option'] ?? 'None',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          task['repeat_option'] ?? 'None',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.grey,
+                                        if (task['image_url'] != null) ...[
+                                          const SizedBox(width: 12),
+                                          GestureDetector(
+                                            onTap: () {
+                                              showDialog(
+                                                context: context,
+                                                barrierColor: Colors.transparent,
+                                                builder: (BuildContext context) {
+                                                  return BackdropFilter(
+                                                    filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                                                    child: Dialog(
+                                                      backgroundColor: Colors.transparent,
+                                                      child: Stack(
+                                                        children: [
+                                                          Center(
+                                                            child: Container(
+                                                              width: MediaQuery.of(context).size.width * 0.9,
+                                                              height: MediaQuery.of(context).size.height * 0.7,
+                                                              decoration: BoxDecoration(
+                                                                borderRadius: BorderRadius.circular(12),
+                                                              ),
+                                                              child: ClipRRect(
+                                                                borderRadius: BorderRadius.circular(12),
+                                                                child: Image.network(
+                                                                  task['image_url'],
+                                                                  fit: BoxFit.contain,
+                                                                  errorBuilder: (context, error, stackTrace) {
+                                                                    return Container(
+                                                                      decoration: BoxDecoration(
+                                                                        color: Colors.grey[300],
+                                                                        borderRadius: BorderRadius.circular(12),
+                                                                      ),
+                                                                      child: Center(
+                                                                        child: Icon(
+                                                                          Icons.image_not_supported,
+                                                                          color: Colors.grey,
+                                                                          size: 48,
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  },
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          Positioned(
+                                                            bottom: 40,
+                                                            left: 0,
+                                                            right: 0,
+                                                            child: Center(
+                                                              child: GestureDetector(
+                                                                onTap: () {
+                                                                  Navigator.of(context).pop();
+                                                                },
+                                                                child: Container(
+                                                                  padding: EdgeInsets.all(12),
+                                                                  decoration: BoxDecoration(
+                                                                    color: Colors.black54,
+                                                                    shape: BoxShape.circle,
+                                                                  ),
+                                                                  child: Icon(
+                                                                    Icons.close,
+                                                                    color: Colors.white,
+                                                                    size: 24,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              );
+                                            },
+                                            child: Container(
+                                              width: 60,
+                                              height: 60,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: Image.network(
+                                                  task['image_url'],
+                                                  width: 60,
+                                                  height: 60,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) {
+                                                    return Container(
+                                                      width: 60,
+                                                      height: 60,
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[200],
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.image_not_supported,
+                                                        color: Colors.grey,
+                                                        size: 24,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                        ],
                                       ],
                                     ),
                                   ),
