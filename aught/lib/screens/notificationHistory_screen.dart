@@ -123,7 +123,7 @@ class _NotificationhistorypageState extends State<Notificationhistorypage> {
                 onRefresh: _loadNotifications,
                 child: ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),z
+                  padding: const EdgeInsets.all(16),
                   itemCount: notifications.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 16),
                   itemBuilder: (context, index) {
